@@ -1,16 +1,85 @@
 # ContextCore Semantic Conventions
 
-This document defines the semantic conventions for ContextCore attributes, following OpenTelemetry naming patterns.
+This document defines the semantic conventions for ContextCore attributes — **a vendor-agnostic extension of OpenTelemetry semantic conventions** for project management telemetry.
+
+---
 
 ## Overview
 
-ContextCore extends OpenTelemetry semantic conventions with project management context. These attributes appear on:
+### Purpose
+
+ContextCore semantic conventions provide a **standard vocabulary** for project management telemetry. Like OpenTelemetry's semantic conventions for traces, metrics, and logs, these conventions ensure:
+
+- **Portability**: Telemetry can be exported to any OTLP-compatible backend
+- **Interoperability**: Tools from different vendors can understand the same attributes
+- **Consistency**: Teams across organizations use the same terminology
+- **Queryability**: Standard attribute names enable standard queries and dashboards
+
+### Backend Compatibility
+
+These conventions are designed to work with **any observability backend**:
+
+| Backend Type | Examples | Notes |
+|-------------|----------|-------|
+| **Trace Stores** | Jaeger, Zipkin, Tempo, Datadog APM | Task spans stored as traces |
+| **Metrics Stores** | Prometheus, Mimir, InfluxDB, Datadog Metrics | Derived metrics via OTLP |
+| **Log Stores** | Loki, Elasticsearch, Splunk | Structured JSON logs |
+| **All-in-One** | Grafana Cloud, Datadog, New Relic | Full telemetry stack |
+
+### Prometheus/Mimir Export Conventions
+
+When exporting OTel metrics to Prometheus or Mimir, the following transformations apply:
+
+| OTel Convention | Prometheus Export | Notes |
+|----------------|-------------------|-------|
+| Metric names with dots | Converted to underscores | `task.count_by_status` → `task_count_by_status` |
+| Label names with dots | **Preserved as-is** | `task.status` stays `task.status` |
+| Label names with dots | **May need quoting** | Use `"task.status"` in PromQL |
+
+**PromQL Query Examples:**
+
+```promql
+# Labels with dots require quoting in PromQL
+task_count_by_status{project="myproject", "task.status"="in_progress"}
+
+# Simple labels don't need quoting
+task_count_by_status{project="myproject", phase="development"}
+```
+
+**Dashboard Variable Queries:**
+
+```promql
+# Query label values with dots
+label_values(task_count_by_status{project="myproject"}, task_status)
+```
+
+> **Note**: Some OTLP-to-Prometheus exporters may convert dots to underscores in label names. Check your exporter configuration. ContextCore emits OTel semantic convention names with dots.
+
+### Stability
+
+| Status | Meaning |
+|--------|---------|
+| **Stable** | Attribute is finalized, will not change |
+| **Experimental** | May change in future versions |
+| **Deprecated** | Will be removed, use alternative |
+
+> **Note**: All ContextCore conventions are currently **Experimental** as the project matures.
+
+---
+
+## Where Attributes Appear
+
+ContextCore attributes appear on:
 - **Resource attributes**: Attached to all telemetry from a service
-- **Span attributes**: On specific spans when relevant
+- **Span attributes**: On task spans and runtime spans when relevant
 - **Log attributes**: In structured log records
-- **Metric labels**: On Prometheus metrics (where cardinality allows)
+- **Metric labels**: On metrics (where cardinality allows)
+
+---
 
 ## Naming Conventions
+
+### Namespace Prefixes
 
 | Pattern | Example | Description |
 |---------|---------|-------------|
@@ -22,6 +91,38 @@ ContextCore extends OpenTelemetry semantic conventions with project management c
 | `task.*` | `task.id` | Task tracking (tasks as spans) |
 | `sprint.*` | `sprint.id` | Sprint tracking |
 | `k8s.projectcontext.*` | `k8s.projectcontext.name` | K8s CRD context |
+
+### Singular vs Plural
+
+Use **singular form** for attribute values and enum members, **plural form** for collections and method names:
+
+| Context | Form | Example |
+|---------|------|---------|
+| Attribute values | Singular | `insight_type="decision"` |
+| Enum members | Singular | `InsightType.DECISION` |
+| Collection variables | Plural | `decisions: List[InsightData]` |
+| Query method names | Plural | `query_decisions()`, `list_blockers()` |
+| Status fields | Singular | `task.status="in_progress"` |
+
+**Correct examples:**
+```python
+# Attribute values - singular
+insight = InsightData(insight_type="decision", ...)
+task.update_status("in_progress")
+
+# Collections - plural
+recent_decisions = querier.query(insight_type="decision")
+active_blockers = querier.list_blockers()
+```
+
+**Avoid:**
+```python
+# Wrong - plural in attribute value
+insight = InsightData(insight_type="decisions", ...)  # DON'T
+
+# Wrong - singular for collection
+decision = querier.query(...)  # Should be: decisions = ...
+```
 
 ---
 
@@ -376,6 +477,145 @@ ContextCore derives these metrics from task spans:
 
 ---
 
+## Metrics from Logs
+
+ContextCore supports deriving metrics directly from structured logs using Loki recording rules. This enables real-time progress tracking without requiring a separate metrics pipeline.
+
+### Log Event: `task.progress_updated`
+
+Emitted when task progress changes. Contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `event` | `string` | `"task.progress_updated"` |
+| `task_id` | `string` | Task identifier |
+| `task_type` | `string` | Task type (epic, story, task, etc.) |
+| `percent_complete` | `float` | Progress percentage (0-100) |
+| `source` | `string` | How progress was determined: `manual`, `subtask`, `estimate` |
+| `subtask_completed` | `int` | Completed subtasks (when source=subtask) |
+| `subtask_count` | `int` | Total subtasks (when source=subtask) |
+| `sprint_id` | `string` | Sprint identifier (optional) |
+| `project_id` | `string` | Project identifier |
+
+### Example Log Entry
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "level": "info",
+  "event": "task.progress_updated",
+  "service": "contextcore",
+  "project_id": "my-project",
+  "task_id": "PROJ-123",
+  "task_type": "story",
+  "percent_complete": 60.0,
+  "source": "subtask",
+  "subtask_completed": 3,
+  "subtask_count": 5,
+  "sprint_id": "sprint-3"
+}
+```
+
+### Loki Recording Rules
+
+Generate metrics from `percent_complete` logs using Loki Ruler:
+
+```yaml
+# /etc/loki/rules/contextcore-rules.yaml
+groups:
+  - name: contextcore_task_progress
+    interval: 1m
+    rules:
+      # Task progress gauge - last reported percent_complete per task
+      - record: task_percent_complete
+        expr: |
+          max by (project_id, task_id, task_type, sprint_id) (
+            max_over_time(
+              {service="contextcore"}
+              | json
+              | event = "task.progress_updated"
+              | unwrap percent_complete
+              [5m]
+            )
+          )
+        labels:
+          source: loki
+
+      # Average progress by sprint
+      - record: sprint_average_progress
+        expr: |
+          avg by (project_id, sprint_id) (
+            task_percent_complete{sprint_id!=""}
+          )
+        labels:
+          source: derived
+
+      # Count of completed tasks (100%)
+      - record: task_completed_count
+        expr: |
+          count by (project_id, sprint_id) (
+            task_percent_complete == 100
+          )
+        labels:
+          source: derived
+
+      # Task progress rate (change per hour)
+      - record: task_progress_rate
+        expr: |
+          sum by (project_id, task_id) (
+            rate(
+              {service="contextcore"}
+              | json
+              | event = "task.progress_updated"
+              | unwrap percent_complete
+              [1h]
+            )
+          )
+        labels:
+          source: loki
+```
+
+### LogQL Queries for Dashboards
+
+Query progress directly in Grafana without recording rules:
+
+```logql
+# Current progress for all tasks in a project
+{service="contextcore", project_id="my-project"}
+| json
+| event = "task.progress_updated"
+| line_format "{{.task_id}}: {{.percent_complete}}%"
+
+# Progress events over time (for time-series visualization)
+max_over_time(
+  {service="contextcore"}
+  | json
+  | event = "task.progress_updated"
+  | unwrap percent_complete
+  [5m]
+) by (task_id)
+
+# Average sprint progress
+avg(
+  max by (task_id) (
+    {service="contextcore", sprint_id="sprint-3"}
+    | json
+    | event = "task.progress_updated"
+    | unwrap percent_complete
+  )
+)
+```
+
+### Benefits of Metrics from Logs
+
+1. **Single data path**: Progress updates flow through logs to both storage and metrics
+2. **Reduced infrastructure**: No separate metrics exporter needed for task progress
+3. **Queryable context**: Full log context available alongside metrics
+4. **Flexible aggregation**: Aggregate by any log field (task_type, sprint_id, etc.)
+5. **Cost effective**: Leverage existing Loki infrastructure
+
+---
+
 ## Cardinality Guidelines
 
 **Safe for metrics labels** (low cardinality):
@@ -400,3 +640,383 @@ Use these high-cardinality attributes in:
 - Log attributes (indexed in Loki)
 - Alert annotations (contextual)
 - Span attributes (queryable via TraceQL)
+
+---
+
+## Exporter Configuration
+
+ContextCore exports telemetry via OTLP. Configure the endpoint for your backend:
+
+### Environment Variables
+
+```bash
+# Generic OTLP endpoint (works with any OTLP-compatible backend)
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
+
+# Optional: separate endpoints for traces, metrics, logs
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT="http://tempo:4317"
+export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT="http://mimir:4317"
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="http://loki:4317"
+```
+
+### Backend-Specific Examples
+
+**Jaeger:**
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://jaeger-collector:4317"
+```
+
+**Grafana Cloud:**
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp-gateway-prod-us-central-0.grafana.net/otlp"
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64-encoded-credentials>"
+```
+
+**Datadog:**
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
+# Requires Datadog Agent with OTLP ingest enabled
+```
+
+**Honeycomb:**
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://api.honeycomb.io:443"
+export OTEL_EXPORTER_OTLP_HEADERS="x-honeycomb-team=<API_KEY>"
+```
+
+**New Relic:**
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT="https://otlp.nr-data.net:4317"
+export OTEL_EXPORTER_OTLP_HEADERS="api-key=<INGEST_LICENSE_KEY>"
+```
+
+### Reference Implementation (Local Development)
+
+The Grafana stack reference implementation runs locally:
+
+```bash
+# Start local observability stack
+docker-compose up -d  # Grafana, Tempo, Mimir, Loki, Alloy
+
+# ContextCore defaults to localhost:4317
+contextcore task start --id PROJ-123 --title "Test task"
+```
+
+---
+
+## Query Examples by Backend
+
+These semantic conventions enable consistent queries across backends:
+
+**TraceQL (Tempo, Grafana Cloud):**
+```
+{ task.status = "blocked" && task.type = "story" }
+```
+
+**Jaeger:**
+```
+service=contextcore-tracker task.status=blocked
+```
+
+**PromQL (any Prometheus-compatible backend):**
+```promql
+sum by (task.status) (task_count_by_status{project_id="my-project"})
+```
+
+**LogQL (Loki):**
+```logql
+{service="contextcore"} | json | event="task.completed"
+```
+
+**Datadog:**
+```
+@task.status:blocked @task.type:story
+```
+
+The consistent attribute naming ensures dashboards and queries are portable across backends.
+
+---
+
+## Built-in Dashboards
+
+ContextCore automatically provisions two Grafana dashboards on installation. These dashboards use the semantic conventions defined in this document.
+
+### Project Portfolio Overview
+
+High-level view showing all projects tracked by ContextCore:
+
+| Panel | Primary Query | Conventions Used |
+|-------|--------------|------------------|
+| Active Projects | Count distinct `project.id` | `project.id` |
+| Health Matrix | Aggregate by `project.id` with status | `project.id`, `task.status`, `task.percent_complete` |
+| Progress Gauges | `task_percent_complete` by project | `task.percent_complete`, `task.type` |
+| Velocity Trend | `sprint.completed_points` over time | `sprint.id`, `sprint.planned_points`, `sprint.completed_points` |
+| Blocked Tasks | Filter `task.status = "blocked"` | `task.status`, `task.blocked_by`, `task.id` |
+| Status Distribution | Group by `task.status` | `task.status`, `project.id` |
+
+### Project Details (Drill-down)
+
+Deep-dive view for a single project:
+
+| Panel | Primary Query | Conventions Used |
+|-------|--------------|------------------|
+| Sprint Burndown | `sprint.planned_points` - completed | `sprint.id`, `task.story_points` |
+| Kanban Board | Tasks grouped by `task.status` | `task.status`, `task.parent_id`, `task.type` |
+| Work Breakdown | Hierarchical by `task.parent_id` | `task.parent_id`, `task.type`, `task.percent_complete` |
+| Blocker Details | `task.status = "blocked"` with context | `task.blocked_by`, `task.id`, span events |
+| Team Workload | Sum `task.story_points` by `task.assignee` | `task.assignee`, `task.story_points` |
+| Cycle Time | `task.cycle_time` histogram | `task.lead_time`, `task.cycle_time` |
+| Activity Log | Filter by `project.id` | All task event attributes |
+
+### Dashboard Query Patterns
+
+**TraceQL (Tempo) - Task Spans:**
+```traceql
+# All blocked stories in a project
+{ project.id = "my-project" && task.status = "blocked" && task.type = "story" }
+
+# Tasks with hierarchy
+{ project.id = "my-project" && task.parent_id != "" }
+| select(task.id, task.title, task.status, task.percent_complete, task.parent_id)
+```
+
+**LogQL (Loki) - Task Events:**
+```logql
+# Status changes for a project
+{service="contextcore", project_id="my-project"}
+| json
+| event="task.status_changed"
+
+# Progress updates (for metrics derivation)
+{service="contextcore"}
+| json
+| event="task.progress_updated"
+| unwrap percent_complete
+```
+
+**PromQL (Mimir) - Derived Metrics:**
+```promql
+# Average progress by project
+avg by (project_id) (task_percent_complete{task_type=~"story|epic"})
+
+# Work in progress count
+count by (project_id) (task_status{status="in_progress"})
+
+# Velocity trend
+sum by (sprint_id) (increase(task_story_points_completed_total[7d]))
+```
+
+See [docs/dashboards/](dashboards/) for full dashboard specifications.
+
+---
+
+## Installation Verification Attributes
+
+ContextCore tracks its own installation state using telemetry. This enables self-verification and ensures deployments are complete.
+
+### `contextcore.install.*` Namespace
+
+Installation verification attributes use the `contextcore.install.*` namespace.
+
+### Requirement Attributes
+
+#### `contextcore.install.requirement.id`
+- **Type**: `string`
+- **Description**: Unique identifier for the installation requirement
+- **Example**: `"docker_compose"`, `"grafana_running"`, `"tempo_config"`
+
+#### `contextcore.install.requirement.name`
+- **Type**: `string`
+- **Description**: Human-readable requirement name
+- **Example**: `"Docker Compose Configuration"`, `"Grafana Running"`
+
+#### `contextcore.install.requirement.category`
+- **Type**: `string`
+- **Description**: Requirement category
+- **Allowed Values**: `configuration`, `infrastructure`, `tooling`, `observability`, `documentation`
+
+#### `contextcore.install.requirement.status`
+- **Type**: `string`
+- **Description**: Result of requirement check
+- **Allowed Values**: `passed`, `failed`, `skipped`, `error`
+
+#### `contextcore.install.requirement.critical`
+- **Type**: `boolean`
+- **Description**: Whether the requirement is critical for installation completeness
+- **Example**: `true`, `false`
+
+#### `contextcore.install.requirement.duration_ms`
+- **Type**: `float`
+- **Description**: Time to check the requirement in milliseconds
+- **Example**: `12.5`
+
+### Summary Attributes
+
+#### `contextcore.install.completeness`
+- **Type**: `float`
+- **Description**: Overall installation completeness percentage (0-100)
+- **Example**: `85.5`
+
+#### `contextcore.install.is_complete`
+- **Type**: `boolean`
+- **Description**: Whether all critical requirements are met
+- **Example**: `true`
+
+#### `contextcore.install.critical_met`
+- **Type**: `int`
+- **Description**: Number of critical requirements that passed
+- **Example**: `15`
+
+#### `contextcore.install.critical_total`
+- **Type**: `int`
+- **Description**: Total number of critical requirements
+- **Example**: `18`
+
+### Installation Metrics
+
+| Metric | Type | Description | Labels |
+|--------|------|-------------|--------|
+| `contextcore.install.completeness` | Gauge | Overall completeness % | `installation_id` |
+| `contextcore.install.requirement.status` | Gauge | Per-requirement status (1=passed, 0=failed) | `requirement_id`, `requirement_name`, `category`, `critical` |
+| `contextcore.install.category.completeness` | Gauge | Category completeness % | `installation_id`, `category` |
+| `contextcore.install.critical.met` | Gauge | Critical requirements passed | `installation_id` |
+| `contextcore.install.critical.total` | Gauge | Total critical requirements | `installation_id` |
+| `contextcore.install.verification.duration` | Histogram | Verification duration (ms) | `installation_id` |
+
+### Installation Spans
+
+Verification runs as a trace with child spans for each requirement check:
+
+```
+contextcore.install.verify (root span)
+├── install.verify.docker_compose
+├── install.verify.makefile
+├── install.verify.tempo_config
+├── install.verify.grafana_running
+│   └── (depends_on: docker_compose, docker_available)
+└── ... (one span per requirement)
+```
+
+#### Root Span Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `contextcore.install.total_requirements` | `int` | Total requirements checked |
+| `contextcore.install.categories` | `string[]` | Categories checked |
+| `contextcore.install.completeness` | `float` | Final completeness % |
+| `contextcore.install.is_complete` | `boolean` | All critical met |
+| `contextcore.install.critical_met` | `int` | Critical passed count |
+
+#### Child Span Attributes
+
+Each requirement check span includes:
+- `contextcore.install.requirement.id`
+- `contextcore.install.requirement.name`
+- `contextcore.install.requirement.category`
+- `contextcore.install.requirement.critical`
+- `contextcore.install.requirement.status`
+- `contextcore.install.requirement.duration_ms`
+
+### Installation Requirements
+
+ContextCore tracks these requirements organized by category:
+
+#### Configuration
+| ID | Name | Critical | Description |
+|----|------|----------|-------------|
+| `docker_compose` | Docker Compose Configuration | Yes | docker-compose.yaml exists |
+| `makefile` | Makefile | Yes | Operational targets available |
+| `tempo_config` | Tempo Configuration | Yes | tempo/tempo.yaml exists |
+| `mimir_config` | Mimir Configuration | Yes | mimir/mimir.yaml exists |
+| `loki_config` | Loki Configuration | Yes | loki/loki.yaml exists |
+| `grafana_datasources_config` | Grafana Datasources | Yes | Auto-provisioning config |
+| `grafana_dashboards_config` | Grafana Dashboards | No | Dashboard provisioning |
+
+#### Tooling
+| ID | Name | Critical | Description |
+|----|------|----------|-------------|
+| `cli_installed` | ContextCore CLI | Yes | contextcore command available |
+| `ops_module` | Operations Module | Yes | contextcore.ops module |
+| `install_module` | Installation Module | No | contextcore.install module |
+| `docker_available` | Docker Available | Yes | Docker daemon running |
+| `make_available` | Make Available | No | make command available |
+
+#### Infrastructure
+| ID | Name | Critical | Depends On |
+|----|------|----------|------------|
+| `grafana_running` | Grafana Running | Yes | docker_compose, docker_available |
+| `tempo_running` | Tempo Running | Yes | docker_compose, docker_available, tempo_config |
+| `mimir_running` | Mimir Running | Yes | docker_compose, docker_available, mimir_config |
+| `loki_running` | Loki Running | Yes | docker_compose, docker_available, loki_config |
+| `otlp_grpc` | OTLP gRPC Endpoint | Yes | tempo_running |
+| `otlp_http` | OTLP HTTP Endpoint | Yes | tempo_running |
+| `data_persistence` | Data Persistence | Yes | docker_compose |
+
+#### Observability
+| ID | Name | Critical | Depends On |
+|----|------|----------|------------|
+| `grafana_tempo_datasource` | Tempo Datasource | Yes | grafana_running |
+| `grafana_mimir_datasource` | Mimir Datasource | Yes | grafana_running |
+| `grafana_loki_datasource` | Loki Datasource | Yes | grafana_running |
+| `grafana_dashboards` | Dashboards Provisioned | No | grafana_running |
+
+#### Documentation
+| ID | Name | Critical | Description |
+|----|------|----------|-------------|
+| `operational_resilience_doc` | Operational Resilience Guide | No | docs/OPERATIONAL_RESILIENCE.md |
+| `operational_runbook` | Operational Runbook | No | docs/OPERATIONAL_RUNBOOK.md |
+
+### TraceQL Queries for Installation
+
+```traceql
+# All installation verifications
+{ name = "contextcore.install.verify" }
+
+# Failed requirements only
+{ name =~ "install.verify.*" && contextcore.install.requirement.status = "failed" }
+
+# Critical failures
+{ contextcore.install.requirement.critical = true && contextcore.install.requirement.status = "failed" }
+
+# Infrastructure checks
+{ contextcore.install.requirement.category = "infrastructure" }
+
+# Verification history with completeness
+{ name = "contextcore.install.verify" }
+| select(contextcore.install.completeness, contextcore.install.critical_met)
+```
+
+### PromQL Queries for Installation
+
+```promql
+# Overall installation completeness
+contextcore_install_completeness{installation_id="contextcore"}
+
+# Failed requirements count
+count(contextcore_install_requirement_status == 0)
+
+# Critical requirements status
+contextcore_install_critical_met / contextcore_install_critical_total * 100
+
+# Category completeness
+contextcore_install_category_completeness{category="infrastructure"}
+
+# Verification duration trend
+histogram_quantile(0.95, rate(contextcore_install_verification_duration_bucket[1h]))
+```
+
+### CLI Usage
+
+```bash
+# Full verification with telemetry
+contextcore install verify
+
+# Quick status check (no telemetry)
+contextcore install status
+
+# Check specific categories
+contextcore install verify --category infrastructure --category tooling
+
+# JSON output for automation
+contextcore install verify --format json
+```
