@@ -63,3 +63,12 @@ generated/
 # Environment
 .env
 .env.local
+
+# Operational data (persistent volumes)
+data/
+backups/
+
+# Secrets (never commit)
+**/secret-*.yaml
+**/secret*.yaml
+*.secret.yaml
