@@ -436,6 +436,110 @@ def _generate_dashboard(name: str, namespace: str, spec: dict) -> dict:
     }
 
 
+# ============================================================================
+# Runbook Generation
+# ============================================================================
+
+
+def _get_project_context_spec(project: str, namespace: str = "default") -> Optional[dict]:
+    """
+    Fetch ProjectContext spec from Kubernetes cluster.
+
+    Args:
+        project: ProjectContext name or namespace/name
+        namespace: Default namespace if not specified in project
+
+    Returns:
+        ProjectContext spec dict, or None if not found
+    """
+    import subprocess
+
+    # Parse project identifier
+    if "/" in project:
+        namespace, name = project.split("/", 1)
+    else:
+        name = project
+
+    cmd = [
+        "kubectl", "get", "projectcontext", name,
+        "-n", namespace, "-o", "json"
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+
+    pc = json.loads(result.stdout)
+    return pc.get("spec", {})
+
+
+@main.command()
+@click.option("--project", "-p", required=True, help="ProjectContext name (or namespace/name)")
+@click.option("--namespace", "-n", default="default", help="Kubernetes namespace")
+@click.option("--output", "-o", type=click.Path(), help="Output file path (default: stdout)")
+@click.option("--format", "output_format", default="markdown",
+              type=click.Choice(["markdown"]), help="Output format")
+@click.option("--from-file", type=click.Path(exists=True),
+              help="Read spec from local YAML file instead of cluster")
+def runbook(
+    project: str,
+    namespace: str,
+    output: Optional[str],
+    output_format: str,
+    from_file: Optional[str],
+):
+    """Generate operational runbook from ProjectContext.
+
+    Creates a Markdown runbook containing:
+    - Service overview and business context
+    - SLO definitions and alert thresholds
+    - Known risks and mitigations
+    - Kubernetes resource inspection commands
+    - Common operational procedures
+    - Escalation contacts
+
+    Examples:
+        contextcore runbook -p my-service
+        contextcore runbook -p default/my-service -o runbook.md
+        contextcore runbook -p my-service --from-file context.yaml
+    """
+    from contextcore.generators.runbook import generate_runbook
+
+    # Get spec from file or cluster
+    if from_file:
+        with open(from_file) as f:
+            data = yaml.safe_load(f)
+        spec = data.get("spec", data)
+        # Extract project_id from spec or filename
+        project_info = spec.get("project", {})
+        if isinstance(project_info, dict):
+            project_id = project_info.get("id", project)
+        else:
+            project_id = project_info or project
+    else:
+        spec = _get_project_context_spec(project, namespace)
+        if spec is None:
+            click.echo(f"Error: ProjectContext '{project}' not found in namespace '{namespace}'", err=True)
+            click.echo("Hint: Use --from-file to generate from a local YAML file", err=True)
+            sys.exit(1)
+        project_info = spec.get("project", {})
+        if isinstance(project_info, dict):
+            project_id = project_info.get("id", project)
+        else:
+            project_id = project_info or project
+
+    # Generate runbook
+    runbook_content = generate_runbook(project_id, spec, output_format)
+
+    # Output
+    if output:
+        with open(output, "w") as f:
+            f.write(runbook_content)
+        click.echo(f"Runbook written to {output}")
+    else:
+        click.echo(runbook_content)
+
+
 @main.group()
 def sync():
     """Sync ProjectContext from external tools."""
