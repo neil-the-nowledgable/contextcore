@@ -42,6 +42,11 @@ from .insight import insight
 from .knowledge import knowledge
 from .core import create, annotate, generate, runbook, controller
 
+# Phase 2 commands
+from .review import review
+from .contract import contract
+from .slo_tests import slo_tests
+
 
 @click.group()
 @click.version_option()
@@ -72,6 +77,11 @@ main.add_command(value)
 main.add_command(skill)
 main.add_command(insight)
 main.add_command(knowledge)
+
+# Phase 2 command groups
+main.add_command(review)
+main.add_command(contract)
+main.add_command(slo_tests, name="slo-tests")
 
 
 if __name__ == "__main__":
