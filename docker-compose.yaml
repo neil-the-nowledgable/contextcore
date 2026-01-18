@@ -1,0 +1,134 @@
+# ContextCore Observability Stack
+#
+# Local development stack with persistent storage.
+# Data survives container restarts and is stored in ./data/
+#
+# Usage:
+#   make up          Start the stack (runs doctor first)
+#   make down        Stop (preserve data)
+#   make destroy     Delete (auto-backup, confirm)
+#   make health      Check component health
+#   make smoke-test  Validate entire stack
+#
+# Or directly with docker compose:
+#   docker compose up -d
+#   docker compose down      # preserves data
+#   docker compose down -v   # destroys data (use make destroy instead)
+
+services:
+  # ==========================================================================
+  # Grafana - Visualization
+  # ==========================================================================
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: contextcore-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    volumes:
+      - ./data/grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    networks:
+      - contextcore
+
+  # ==========================================================================
+  # Tempo - Distributed Tracing
+  # ==========================================================================
+  tempo:
+    image: grafana/tempo:2.6.1
+    container_name: contextcore-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "3200:3200"   # Tempo HTTP
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    volumes:
+      - ./data/tempo:/var/tempo
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contextcore
+
+  # ==========================================================================
+  # Mimir - Metrics (Prometheus-compatible)
+  # ==========================================================================
+  mimir:
+    image: grafana/mimir:2.14.1
+    container_name: contextcore-mimir
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    ports:
+      - "9009:9009"
+    volumes:
+      - ./data/mimir:/data
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9009/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contextcore
+
+  # ==========================================================================
+  # Loki - Log Aggregation
+  # ==========================================================================
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: contextcore-loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./data/loki:/loki
+      - ./loki/loki.yaml:/etc/loki/loki.yaml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - contextcore
+
+  # ==========================================================================
+  # Alloy - OpenTelemetry Collector (optional, for receiving from remote)
+  # ==========================================================================
+  # Uncomment if you need a collector between your app and backends
+  # alloy:
+  #   image: grafana/alloy:v1.5.1
+  #   container_name: contextcore-alloy
+  #   command: ["run", "/etc/alloy/config.alloy"]
+  #   ports:
+  #     - "12345:12345"  # Alloy UI
+  #   volumes:
+  #     - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+  #   depends_on:
+  #     - tempo
+  #     - mimir
+  #     - loki
+  #   networks:
+  #     - contextcore
+
+networks:
+  contextcore:
+    driver: bridge
