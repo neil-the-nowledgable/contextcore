@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SkillType(str, Enum):
@@ -283,8 +283,7 @@ class SkillCapability(BaseModel):
             return self.audience
         return derive_audience(self.interop_human, self.interop_agent)
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class QuickAction(BaseModel):
@@ -390,5 +389,4 @@ class SkillManifest(BaseModel):
         description="Projects that use this skill"
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)

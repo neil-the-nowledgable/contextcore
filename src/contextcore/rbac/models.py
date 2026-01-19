@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PrincipalType(str, Enum):
@@ -96,8 +96,7 @@ class Principal(BaseModel):
     # K8s-specific fields
     namespace: Optional[str] = Field(None, description="K8s namespace for service accounts")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class Resource(BaseModel):
@@ -130,8 +129,7 @@ class Resource(BaseModel):
     sensitive: bool = Field(default=False, description="Requires elevated permissions")
     sensitivity_reason: Optional[str] = Field(None, description="Why this is sensitive")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
     def matches(self, other: "Resource") -> bool:
         """Check if this resource matches another (for permission checking)."""
@@ -188,8 +186,7 @@ class Permission(BaseModel):
     )
     reason: Optional[str] = Field(None, description="Reason for granting")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
     def is_expired(self) -> bool:
         """Check if permission has expired."""
@@ -255,8 +252,7 @@ class Role(BaseModel):
         default_factory=lambda: datetime.now(timezone.utc)
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class RoleBinding(BaseModel):
@@ -288,8 +284,7 @@ class RoleBinding(BaseModel):
     )
     expires_at: Optional[datetime] = Field(None, description="Expiration timestamp")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
     def is_expired(self) -> bool:
         """Check if binding has expired."""
@@ -329,8 +324,7 @@ class AccessDecision(BaseModel):
     )
     trace_id: Optional[str] = Field(None, description="OTel trace ID for correlation")
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class AccessDeniedError(Exception):

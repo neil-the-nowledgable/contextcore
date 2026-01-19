@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from contextcore.skill.models import (
     Audience,
@@ -202,8 +202,7 @@ class KnowledgeCapability(SkillCapability):
         description="Cross-references to other sections"
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class KnowledgeManifest(SkillManifest):
@@ -237,8 +236,7 @@ class KnowledgeManifest(SkillManifest):
         description="Document has YAML frontmatter"
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 # Map section headings to knowledge categories
