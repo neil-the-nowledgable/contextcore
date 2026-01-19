@@ -31,7 +31,10 @@ __all__ = [
     "TaskTracker",
     "SprintTracker",
     "TaskMetrics",
+    "TaskLogger",
     "get_task_link",
+    "get_config",
+    "ProjectSchema",
     "__version__",
 ]
 
@@ -50,6 +53,9 @@ def __getattr__(name: str):
     if name == "TaskMetrics":
         from contextcore.metrics import TaskMetrics
         return TaskMetrics
+    if name == "TaskLogger":
+        from contextcore.logger import TaskLogger
+        return TaskLogger
     if name == "get_task_link":
         from contextcore.tracker import TaskTracker
         # Return a helper function
@@ -57,4 +63,10 @@ def __getattr__(name: str):
             tracker = TaskTracker(project=project)
             return tracker.get_task_link(task_id)
         return get_task_link
+    if name == "get_config":
+        from contextcore.config import get_config
+        return get_config
+    if name == "ProjectSchema":
+        from contextcore.contracts import ProjectSchema
+        return ProjectSchema
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

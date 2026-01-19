@@ -72,3 +72,34 @@ backups/
 **/secret-*.yaml
 **/secret*.yaml
 *.secret.yaml
+
+# Archives and zip files
+*.zip
+
+# Extracted archive directories
+contextcore_cfp_variants/
+contextcore_docs/
+contextcore_governance_docs/
+contextcore_next_steps_docs/
+contextcore_next_steps_docs (1)/
+
+# Working notes and dev logs
+*-todos.md
+*Dev Log.md
+areas-of-improvemet-*.md
+next-steps-*.md
+next_steps_*.md
+practice-*.md
+CC-operator-prompt.md
+
+# Marketing materials (separate repo)
+marketing/
+
+# Scratch/experimental directories
+agent-based-commuication/
+
+# Generated HTML artifacts
+index.html
+
+# Commit planning (temporary)
+COMMIT_PLAN.md

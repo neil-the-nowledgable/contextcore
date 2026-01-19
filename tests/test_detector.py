@@ -114,27 +114,21 @@ class TestK8sDetection:
     """Test K8s-based detection (mocked)."""
 
     def test_detect_from_k8s_annotations(self, mock_k8s_client):
-        """Detector should read annotations from K8s pod."""
-        with patch("contextcore.detector.client") as mock_client_module:
-            mock_client_module.CoreV1Api.return_value = mock_k8s_client
-            with patch("contextcore.detector.config"):
-                detector = ProjectContextDetector(
-                    pod_name="test-pod",
-                    namespace="test-namespace",
-                )
+        """Detector should parse K8s annotations correctly."""
+        # Test the annotation parsing logic (no K8s API needed)
+        detector = ProjectContextDetector(
+            pod_name="test-pod",
+            namespace="test-namespace",
+        )
 
-                # This would normally call K8s API
-                # attrs = detector._detect_from_k8s()
+        annotations = {
+            "contextcore.io/project": "k8s-project",
+            "contextcore.io/criticality": "critical",
+        }
+        attrs = detector._parse_annotations(annotations)
 
-                # For now, test the parsing logic
-                annotations = {
-                    "contextcore.io/project": "k8s-project",
-                    "contextcore.io/criticality": "critical",
-                }
-                attrs = detector._parse_annotations(annotations)
-
-                assert attrs.get("project.id") == "k8s-project"
-                assert attrs.get("business.criticality") == "critical"
+        assert attrs.get("project.id") == "k8s-project"
+        assert attrs.get("business.criticality") == "critical"
 
     def test_k8s_detection_fallback_to_env(self, test_env):
         """If K8s detection fails, should fall back to env."""
