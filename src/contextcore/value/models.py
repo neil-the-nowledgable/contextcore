@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from contextcore.knowledge.models import (
     KnowledgeCapability,
@@ -193,8 +193,7 @@ class ValueAttribute(BaseModel):
             return self.primary_channel
         return self.channels[0] if self.channels else Channel.DOCS
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ValueCapability(KnowledgeCapability):
@@ -280,8 +279,7 @@ class ValueCapability(KnowledgeCapability):
         description="Additional keywords for value-based discovery"
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class ValueManifest(KnowledgeManifest):
@@ -311,8 +309,7 @@ class ValueManifest(KnowledgeManifest):
         description="Technical skills this value manifest relates to"
     )
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 # =============================================================================
