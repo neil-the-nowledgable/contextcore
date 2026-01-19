@@ -10,6 +10,7 @@ from typing import Optional, Tuple
 import click
 import yaml
 
+from contextcore.contracts.timeouts import SUBPROCESS_DEFAULT_TIMEOUT_S
 from ._generators import generate_service_monitor, generate_prometheus_rule, generate_dashboard
 
 
@@ -72,7 +73,7 @@ def _run_kubectl(args: list, input_text: str = None, context: str = "") -> Tuple
             input=input_text,
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=SUBPROCESS_DEFAULT_TIMEOUT_S,
         )
     except subprocess.TimeoutExpired:
         raise click.ClickException(

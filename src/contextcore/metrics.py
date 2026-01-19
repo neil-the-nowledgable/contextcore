@@ -19,7 +19,7 @@ import logging
 import os
 import socket
 from datetime import datetime, timezone, timedelta
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
@@ -30,6 +30,11 @@ from opentelemetry.sdk.metrics.export import (
 from opentelemetry.sdk.resources import Resource
 
 from contextcore.contracts.metrics import MetricName
+from contextcore.contracts.timeouts import (
+    OTEL_FLUSH_TIMEOUT_MS,
+    OTEL_ENDPOINT_CHECK_TIMEOUT_S,
+    OTEL_DEFAULT_GRPC_PORT,
+)
 from contextcore.state import StateManager, SpanState
 
 logger = logging.getLogger(__name__)
@@ -112,12 +117,14 @@ class TaskMetrics:
     def _atexit_shutdown(self) -> None:
         """Shutdown handler called at process exit."""
         try:
-            self._provider.force_flush(timeout_millis=5000)
+            self._provider.force_flush(timeout_millis=OTEL_FLUSH_TIMEOUT_MS)
             self._provider.shutdown()
         except Exception as e:
             logger.debug(f"Error during metrics atexit shutdown: {e}")
 
-    def _check_endpoint_available(self, endpoint: str, timeout: float = 2.0) -> bool:
+    def _check_endpoint_available(
+        self, endpoint: str, timeout: float = OTEL_ENDPOINT_CHECK_TIMEOUT_S
+    ) -> bool:
         """
         Check if OTLP endpoint is reachable.
 
@@ -133,11 +140,11 @@ class TaskMetrics:
                 from urllib.parse import urlparse
                 parsed = urlparse(endpoint)
                 host = parsed.hostname or "localhost"
-                port = parsed.port or 4317
+                port = parsed.port or OTEL_DEFAULT_GRPC_PORT
             else:
                 parts = endpoint.split(":")
                 host = parts[0] if parts else "localhost"
-                port = int(parts[1]) if len(parts) > 1 else 4317
+                port = int(parts[1]) if len(parts) > 1 else OTEL_DEFAULT_GRPC_PORT
 
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(timeout)
@@ -210,7 +217,7 @@ class TaskMetrics:
             pass
 
         try:
-            self._provider.force_flush(timeout_millis=5000)
+            self._provider.force_flush(timeout_millis=OTEL_FLUSH_TIMEOUT_MS)
             self._provider.shutdown()
             logger.debug("TaskMetrics shutdown complete")
         except Exception as e:
@@ -447,11 +454,6 @@ class TaskMetrics:
             "blocked": status_counts.get("blocked", 0),
             "status_breakdown": status_counts,
         }
-
-    def shutdown(self) -> None:
-        """Flush and shutdown metrics provider."""
-        self._provider.force_flush()
-        self._provider.shutdown()
 
 
 def compute_velocity(

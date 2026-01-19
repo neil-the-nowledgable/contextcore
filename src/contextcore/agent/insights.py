@@ -18,13 +18,15 @@ from typing import Any, Iterator
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-logger = logging.getLogger(__name__)
+from contextcore.contracts.timeouts import (
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_RETRY_DELAY_S,
+    DEFAULT_RETRY_BACKOFF,
+    RETRYABLE_HTTP_STATUS_CODES,
+    HTTP_CLIENT_TIMEOUT_S,
+)
 
-# Retry configuration
-DEFAULT_MAX_RETRIES = 3
-DEFAULT_RETRY_DELAY = 1.0  # seconds
-DEFAULT_RETRY_BACKOFF = 2.0  # exponential backoff multiplier
-RETRYABLE_STATUS_CODES = {503, 502, 504, 429}  # Service unavailable, bad gateway, gateway timeout, rate limited
+logger = logging.getLogger(__name__)
 
 
 class InsightType(str, Enum):
@@ -395,7 +397,7 @@ class InsightQuerier:
         tempo_url: str | None = "http://localhost:3200",
         local_storage_path: str | None = None,
         max_retries: int = DEFAULT_MAX_RETRIES,
-        retry_delay: float = DEFAULT_RETRY_DELAY,
+        retry_delay: float = DEFAULT_RETRY_DELAY_S,
     ):
         """
         Initialize the querier.
@@ -435,7 +437,7 @@ class InsightQuerier:
         """Lazy-load httpx client."""
         if self._http_client is None:
             import httpx
-            self._http_client = httpx.Client(timeout=30.0)
+            self._http_client = httpx.Client(timeout=HTTP_CLIENT_TIMEOUT_S)
         return self._http_client
 
     def _request_with_retry(
@@ -472,7 +474,7 @@ class InsightQuerier:
                 response = getattr(client, method)(url, **kwargs)
 
                 # Check for retryable status codes
-                if response.status_code in RETRYABLE_STATUS_CODES:
+                if response.status_code in RETRYABLE_HTTP_STATUS_CODES:
                     if attempt < retries:
                         logger.warning(
                             f"Tempo returned {response.status_code} for {url}, "
@@ -636,11 +638,25 @@ class InsightQuerier:
             },
         )
         response.raise_for_status()
-        data = response.json()
+
+        # Validate response format
+        try:
+            data = response.json()
+        except ValueError as e:
+            logger.error(f"Tempo returned invalid JSON: {e}")
+            return []
+
+        if not isinstance(data, dict):
+            logger.error(f"Tempo returned unexpected response type: {type(data).__name__}")
+            return []
 
         # Parse traces into Insights
         insights = []
         traces_to_fetch = data.get("traces", [])
+
+        if not isinstance(traces_to_fetch, list):
+            logger.warning(f"Tempo 'traces' field is not a list: {type(traces_to_fetch).__name__}")
+            traces_to_fetch = []
 
         # Limit trace fetches to avoid overwhelming Tempo
         max_trace_fetches = min(len(traces_to_fetch), limit * 2)  # Allow some buffer for filtering
@@ -698,12 +714,25 @@ class InsightQuerier:
                     v.get("stringValue", "") for v in value["arrayValue"].get("values", [])
                 ]
 
+        # Validate required fields exist
+        insight_id = attrs.get("insight.id")
+        insight_type_str = attrs.get("insight.type")
+        insight_summary = attrs.get("insight.summary")
+
+        if not insight_id:
+            logger.debug(f"Skipping span in trace {trace_id}: missing insight.id")
+            return None
+
+        if not insight_type_str:
+            logger.debug(f"Skipping insight {insight_id}: missing insight.type")
+            return None
+
         # Extract insight fields
         try:
             return Insight(
-                id=attrs.get("insight.id", ""),
-                type=InsightType(attrs.get("insight.type", "analysis")),
-                summary=attrs.get("insight.summary", ""),
+                id=insight_id,
+                type=InsightType(insight_type_str),
+                summary=insight_summary or "",
                 confidence=float(attrs.get("insight.confidence", 0.0)),
                 audience=InsightAudience(attrs.get("insight.audience", "both")),
                 project_id=attrs.get("project.id", ""),
@@ -714,7 +743,8 @@ class InsightQuerier:
                 applies_to=attrs.get("insight.applies_to", []),
                 category=attrs.get("insight.category"),
             )
-        except (ValueError, KeyError):
+        except (ValueError, KeyError) as e:
+            logger.debug(f"Failed to parse insight {insight_id} from trace {trace_id}: {e}")
             return None
 
     def _query_local(
