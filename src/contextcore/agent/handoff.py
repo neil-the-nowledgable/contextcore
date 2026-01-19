@@ -31,6 +31,11 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, AsyncIterator, Optional
 
+from contextcore.contracts.timeouts import (
+    HANDOFF_DEFAULT_TIMEOUT_MS,
+    HANDOFF_POLL_INTERVAL_S,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -70,7 +75,7 @@ class Handoff:
     inputs: dict[str, Any]
     expected_output: ExpectedOutput
     priority: HandoffPriority = HandoffPriority.NORMAL
-    timeout_ms: int = 300000
+    timeout_ms: int = HANDOFF_DEFAULT_TIMEOUT_MS
     status: HandoffStatus = HandoffStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     result_trace_id: str | None = None
@@ -113,7 +118,7 @@ class HandoffManager:
                 fields=["root_cause", "evidence", "recommended_fix"]
             ),
             priority=HandoffPriority.HIGH,
-            timeout_ms=300000
+            timeout_ms=HANDOFF_DEFAULT_TIMEOUT_MS
         )
 
         if result.status == HandoffStatus.COMPLETED:
@@ -169,7 +174,7 @@ class HandoffManager:
         inputs: dict[str, Any],
         expected_output: ExpectedOutput,
         priority: HandoffPriority = HandoffPriority.NORMAL,
-        timeout_ms: int = 300000,
+        timeout_ms: int = HANDOFF_DEFAULT_TIMEOUT_MS,
     ) -> str:
         """
         Create a new handoff.
@@ -220,7 +225,7 @@ class HandoffManager:
     def await_result(
         self,
         handoff_id: str,
-        timeout_ms: int = 300000,
+        timeout_ms: int = HANDOFF_DEFAULT_TIMEOUT_MS,
         poll_interval_ms: int = 1000,
     ) -> HandoffResult:
         """
@@ -265,7 +270,7 @@ class HandoffManager:
         inputs: dict[str, Any],
         expected_output: ExpectedOutput,
         priority: HandoffPriority = HandoffPriority.NORMAL,
-        timeout_ms: int = 300000,
+        timeout_ms: int = HANDOFF_DEFAULT_TIMEOUT_MS,
     ) -> HandoffResult:
         """Create handoff and wait for result (convenience method)."""
         handoff_id = self.create_handoff(
@@ -396,7 +401,7 @@ class HandoffReceiver:
     def poll_handoffs(
         self,
         project_id: str,
-        poll_interval_s: float = 1.0,
+        poll_interval_s: float = HANDOFF_POLL_INTERVAL_S,
         timeout_s: Optional[float] = None,
     ):
         """
@@ -467,7 +472,7 @@ class HandoffReceiver:
     async def watch_handoffs_async(
         self,
         project_id: str,
-        poll_interval_s: float = 1.0,
+        poll_interval_s: float = HANDOFF_POLL_INTERVAL_S,
     ) -> AsyncIterator[Handoff]:
         """
         Async generator for watching handoffs.
