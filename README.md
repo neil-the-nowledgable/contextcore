@@ -1,108 +1,207 @@
 # ContextCore
 
-**Unified metadata model from project initiation to operations via Kubernetes CRDs.**
+**One system. Every audience. Always current.**
+
+The first project management system built for human-agent parity.
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Kubernetes](https://img.shields.io/badge/Kubernetes-CRD-326CE5)](https://kubernetes.io/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-native-blueviolet)](https://opentelemetry.io/)
+[![OTLP](https://img.shields.io/badge/OTLP-compatible-green)](https://opentelemetry.io/docs/specs/otlp/)
 
-## The Problem
+## What is ContextCore?
 
-Design-time knowledge is isolated from runtime operations:
+**ContextCore** is a unified communication layer where humans and AI agents share the same knowledge. Project metadata, agent insights, and operational context—all queryable, all persistent, all in your existing observability stack.
 
-| Project Management | Kubernetes/Operations |
-|--------------------|-----------------------|
-| Business value | Deployment specs |
-| Design documents | Service configs |
-| Requirements | Resource limits |
-| Risk assessments | Alerting rules |
-| **Lives in Jira/Notion** | **Lives in YAML** |
+### The Problem
 
-When an alert fires at 2am, responders ask: *"What is this service? Why is it important? Where's the design doc?"* — and the answers are scattered across disconnected systems.
+AI agents generate valuable insights during development—architectural decisions, root cause analyses, code recommendations. But that knowledge **dies when the session ends**:
 
-## The Solution
+- Can't query what agents discovered
+- Other agents can't access it
+- Every new session starts from zero
 
-**ContextCore** uses a Kubernetes CRD to inject project management context directly into the cluster:
+This is the **agent data silo**—and it joins the context gap we've always had between project management and operations.
 
-```yaml
-apiVersion: contextcore.io/v1
-kind: ProjectContext
-metadata:
-  name: checkout-service
-  namespace: commerce
-spec:
-  project:
-    id: "commerce-platform"
-    epic: "EPIC-42"
-    tasks: ["TASK-789"]
+### The Solution
 
-  design:
-    doc: "https://docs.internal/checkout-redesign"
-    adr: "ADR-015-event-driven-checkout"
+ContextCore stores agent insights alongside project and operational data in your observability stack:
 
-  business:
-    criticality: critical
-    value: revenue-primary
-    owner: commerce-team
+| Problem | ContextCore Solution |
+|---------|---------------------|
+| Agent insights in chat transcripts | Agent insights as OTel spans in Tempo |
+| Can't query agent knowledge | TraceQL: `{ insight.type = "decision" }` |
+| Repeat constraints every session | Set guidance once in CRD, all sessions respect it |
+| Different formats for different audiences | Same data, personalized presentation |
+| Developers manually update Jira | Status derived from commits, PRs, CI |
+| PM tools disconnected from ops | Unified in observability stack |
 
-  requirements:
-    availability: "99.95"
-    latencyP99: "200ms"
+## Key Benefits
 
-  risks:
-    - type: security
-      description: "Handles PII and payment data"
-      priority: P1
+### 1. Agent-to-Agent Communication
 
-  targets:
-    - kind: Deployment
-      name: checkout-service
-```
-
-## Key Features
-
-### Value-Based Observability Derivation
-
-The controller auto-generates observability artifacts from project metadata:
-
-| Project Signal | Generated Artifact |
-|----------------|-------------------|
-| `criticality: critical` | 100% trace sampling, 10s metrics, P1 alerts |
-| `value: revenue-primary` | SLO definition, error budget tracking |
-| `requirements.latencyP99` | PrometheusRule with latency alert |
-| `risks[].type: security` | Extended audit logging |
-| `design.adr` | Runbook link in alert annotations |
-
-### Context-Rich Telemetry
-
-All runtime telemetry automatically includes project context via OTel Resource Detector:
+Agents emit insights as OpenTelemetry spans. Other agents query them. Knowledge persists.
 
 ```python
-from contextcore import ProjectContextDetector
-from opentelemetry.sdk.resources import get_aggregated_resources
-from opentelemetry.sdk.trace import TracerProvider
+from contextcore.agent import InsightEmitter, InsightQuerier
 
-resource = get_aggregated_resources([ProjectContextDetector()])
-provider = TracerProvider(resource=resource)
+# Claude emits a decision
+emitter = InsightEmitter(project_id="checkout", agent_id="claude")
+emitter.emit_decision("Selected event-driven architecture", confidence=0.92)
 
-# Every span now includes:
-# - project.id, project.epic
-# - business.criticality, business.value
-# - design.doc, design.adr
+# GPT queries Claude's findings
+querier = InsightQuerier()
+decisions = querier.query(project_id="checkout", insight_type="decision")
 ```
 
-### Incident Context at Your Fingertips
+### 2. Human-to-Agent Guidance
 
-Alerts include design docs, ADRs, and business context:
+Set constraints, focus areas, and questions in a Kubernetes CRD. Persists across all agent sessions.
 
 ```yaml
-annotations:
-  summary: "High latency on checkout-service"
-  design_doc: "https://docs.internal/checkout-redesign"
-  adr: "ADR-015-event-driven-checkout"
-  business_criticality: "critical"
-  owner: "commerce-team"
+agentGuidance:
+  constraints:
+    - id: no-auth-changes
+      rule: "No authentication changes without approval"
+      severity: blocking
+  questions:
+    - id: latency-cause
+      question: "What's causing the checkout latency spike?"
+      priority: critical
+```
+
+### 3. Query Over Markdown
+
+Real-time queries instead of loading stale markdown files:
+
+| Markdown Approach | ContextCore Approach |
+|------------------|---------------------|
+| Load entire DECISIONS.md (~5000 tokens) | Query exactly what's needed (~200 tokens) |
+| Hope it's current | Real-time, streaming |
+| No filtering | "Critical blockers only" |
+| Full file or nothing | Temporal queries ("last 7 days") |
+
+### 4. Personalized Presentation
+
+Same underlying data, different views for each audience:
+
+| Audience | View |
+|----------|------|
+| **Executive** | "Blockers resolved: 3" |
+| **Developer** | "Root cause: N+1 query in payment_verify (trace: abc123)" |
+| **Agent** | `insight_id: xyz, type: analysis, confidence: 0.95` |
+
+### 5. Eliminate Developer Toil
+
+**Stop asking developers to write status reports.** The information already exists:
+
+| Artifact | Derived Status |
+|----------|---------------|
+| First commit on task | `todo` → `in_progress` |
+| PR opened | `in_progress` → `in_review` |
+| PR merged | `in_review` → `done` |
+| CI failure | Task marked `at_risk` |
+| No commits for 7 days | Stale task alert |
+
+### 6. Business-Aware Observability
+
+Auto-generate observability strategies from project context:
+
+| Business Context | Generated Strategy |
+|-----------------|-------------------|
+| `criticality: critical` | 100% trace sampling, P1 alerts |
+| `business.owner: commerce-team` | Alert routing to #commerce-oncall |
+| `design.adr: ADR-015` | Runbook link in alert annotations |
+
+## Differentiation: Not Another Tool
+
+### Why Observability Infrastructure, Not a New Portal?
+
+Tools like Backstage require adopting a **new system**. ContextCore takes a different approach:
+
+| Dimension | Developer Portals | ContextCore |
+|-----------|------------------|-------------|
+| Infrastructure | New app to deploy | Uses existing observability stack |
+| Database | New persistence layer | Tempo, Mimir, Loki (already running) |
+| Authentication | Another login | Same Grafana access |
+| Adoption | Migrate teams | Zero new tools |
+
+**The insight**: Given the infrastructure required for large systems, it's more feasible to leverage existing observability tools than to shoe-horn operations into PM tools.
+
+### The Natural Evolution
+
+```
+2010s: Logging     → "Centralize logs"        → ELK, Splunk
+2015s: Metrics     → "Add time-series"        → Prometheus
+2018s: Tracing     → "Trace across services"  → Jaeger
+2019:  OTel        → "Unify with semantics"   → OpenTelemetry
+2024+: ContextCore → "Extend to project mgmt" → Tasks as spans
+```
+
+## How It Works
+
+### Tasks as Spans
+
+Project tasks are modeled as OpenTelemetry spans:
+
+```python
+from contextcore import TaskTracker
+
+tracker = TaskTracker(project="my-project")
+
+# Start a task (creates span)
+tracker.start_task(
+    task_id="PROJ-123",
+    title="Implement OAuth",
+    task_type="story",
+    priority="high",
+)
+
+# Status changes become span events
+tracker.update_status("PROJ-123", "in_progress")
+
+# Complete task (ends span)
+tracker.complete_task("PROJ-123")
+```
+
+### Automatic Git Integration
+
+```bash
+# Install git hook for automatic commit linking
+contextcore git hook --type post-commit
+
+# Now commits automatically:
+# - Link to referenced tasks (PROJ-123)
+# - Update task status (first commit → in_progress)
+# - Create span events for commits
+```
+
+### Structured Logging to Loki
+
+```json
+{
+  "timestamp": "2024-01-15T10:30:00Z",
+  "event": "task.status_changed",
+  "task_id": "PROJ-123",
+  "from_status": "todo",
+  "to_status": "in_progress",
+  "project_id": "my-project"
+}
+```
+
+### Derived Metrics
+
+Query project health with PromQL:
+
+```promql
+# Work in progress
+task_wip{project_id="my-project"}
+
+# Cycle time histogram
+histogram_quantile(0.95, task_cycle_time_bucket{project_id="my-project"})
+
+# Blocked tasks
+task_count_by_status{status="blocked", project_id="my-project"}
 ```
 
 ## Quick Start
@@ -110,182 +209,271 @@ annotations:
 ### Install
 
 ```bash
+# Install ContextCore SDK
 pip install contextcore
+
+# Apply CRD to Kubernetes
+kubectl apply -f https://contextcore.io/crds/projectcontext-v2.yaml
+
+# Provision dashboards to Grafana (auto-detects local Grafana)
+contextcore dashboards provision
 ```
 
-### Apply CRD
+This installs the SDK, CRD, and provisions the **Project Portfolio Overview** and **Project Details** dashboards to your Grafana instance.
+
+### For Humans: Track Tasks
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/contextcore/contextcore/main/crds/projectcontext.yaml
+# Start a task
+contextcore task start --id PROJ-123 --title "Implement feature" --type story
+
+# Update status
+contextcore task update --id PROJ-123 --status in_progress
+
+# Complete
+contextcore task complete --id PROJ-123
 ```
 
-### Create ProjectContext
+### For Agents: Query and Emit Insights
+
+```python
+from contextcore.agent import InsightQuerier, InsightEmitter, GuidanceReader
+
+# Query what other agents discovered
+querier = InsightQuerier()
+decisions = querier.query(project_id="my-project", insight_type="decision", time_range="7d")
+
+# Check constraints before modifying files
+reader = GuidanceReader(project_id="my-project")
+constraints = reader.get_constraints_for_path("src/auth/")
+
+# Emit your insights
+emitter = InsightEmitter(project_id="my-project", agent_id="claude")
+emitter.emit_decision("Selected async pattern", confidence=0.9)
+```
+
+### View in Grafana
+
+Tasks and insights appear in Tempo, queryable via TraceQL:
+
+```
+# Find blocked tasks
+{ task.status = "blocked" && task.type = "story" }
+
+# Find agent decisions
+{ insight.type = "decision" && insight.confidence > 0.9 }
+
+# Find insights for a specific project
+{ project.id = "checkout" && span.kind = "agent_insight" }
+```
+
+## Built-in Dashboards
+
+ContextCore automatically provisions two Grafana dashboards on installation:
+
+### Project Portfolio Overview
+
+High-level view for executives and program managers:
+
+| Panel | Description |
+|-------|-------------|
+| **KPI Stats** | Active projects, on-track count, at-risk count, blocked tasks |
+| **Health Matrix** | Sortable table with traffic-light status per project |
+| **Progress Gauges** | Visual grid of project completion percentages |
+| **Velocity Trend** | Sprint-over-sprint comparison (planned vs actual) |
+| **Blocked Tasks** | All blockers with duration and reason |
+| **Activity Feed** | Live stream of task events across all projects |
+
+### Project Details (Drill-down)
+
+Deep-dive view for project managers and team leads:
+
+| Panel | Description |
+|-------|-------------|
+| **Sprint Burndown** | Ideal vs actual story point burn |
+| **Kanban Board** | Visual task board grouped by epic/story |
+| **Work Breakdown** | Hierarchical epic → story → task tree with progress bars |
+| **Blocker Analysis** | Full context on blocked items with impact analysis |
+| **Team Workload** | Story points per assignee (capacity view) |
+| **Cycle Time & Throughput** | Flow metrics for process improvement |
+| **Timeline/Gantt** | Task spans over time with blocker annotations |
+| **Activity Log** | Filterable event stream for the project |
+
+### Dashboard Installation
+
+Dashboards are automatically provisioned when ContextCore is installed:
 
 ```bash
-contextcore create \
-  --name checkout-context \
-  --namespace commerce \
-  --project commerce-platform \
-  --criticality critical \
-  --design-doc "https://docs.internal/checkout"
+# Install with dashboards (default)
+contextcore install --with-dashboards
+
+# Skip dashboard provisioning
+contextcore install --skip-dashboards
+
+# Provision dashboards to existing Grafana
+contextcore dashboards provision --grafana-url http://localhost:3000
 ```
 
-### Or via YAML
+See [docs/dashboards/](docs/dashboards/) for full specifications.
 
-```yaml
-apiVersion: contextcore.io/v1
-kind: ProjectContext
-metadata:
-  name: checkout-context
-  namespace: commerce
-spec:
-  project:
-    id: "commerce-platform"
-  business:
-    criticality: critical
-  targets:
-    - kind: Deployment
-      name: checkout-service
-```
+## Vendor Agnostic
+
+ContextCore is **not an observability backend**. It exports via OTLP to any compatible system:
+
+**Open Source:**
+- Jaeger, Zipkin (traces)
+- Prometheus (metrics)
+- Loki (logs)
+
+**Commercial:**
+- Datadog
+- New Relic
+- Honeycomb
+- Dynatrace
+
+**Reference Implementation:**
+- Grafana + Tempo + Mimir + Loki (ships ready for local use)
 
 ```bash
-kubectl apply -f projectcontext.yaml
+# Configure any OTLP endpoint
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://your-backend:4317"
 ```
+
+## One System Serves All Audiences
+
+| Stakeholder | What They See |
+|-------------|---------------|
+| **AI Agents** | Typed schemas, prior insights, guidance constraints |
+| **Developers** | Technical detail, trace IDs, code references |
+| **Project Managers** | Sprint burndown, WIP, blockers |
+| **Leadership** | Portfolio health, agent utilization |
+| **Operators** | Incident context, agent recommendations |
+
+**Humans query Grafana. Agents query TraceQL. Same data. Same location.**
 
 ## Architecture
 
 ```
-┌────────────────────────────────────────────────────────────────────┐
-│                         PROJECT LAYER                               │
-│   Jira  ──  Notion  ──  GitHub  ──  ADRs                           │
-│         └─────────────┬─────────────┘                              │
-│                       │ contextcore sync                           │
-└───────────────────────┼────────────────────────────────────────────┘
-                        ▼
-┌────────────────────────────────────────────────────────────────────┐
-│                      KUBERNETES LAYER                               │
-│                                                                     │
-│   ┌──────────────────────────────────────────────────────────┐    │
-│   │                  ProjectContext CRD                       │    │
-│   │   Single source of truth for project + operational context│    │
-│   └──────────────────────────────────────────────────────────┘    │
-│                        │                                            │
-│                        │ contextcore-controller                     │
-│                        ▼                                            │
-│   ┌─────────────┐ ┌─────────────┐ ┌─────────────┐                 │
-│   │ ServiceMon. │ │ Prom. Rule  │ │  Dashboard  │ (generated)     │
-│   └─────────────┘ └─────────────┘ └─────────────┘                 │
-│   ┌─────────────┐ ┌─────────────┐                                  │
-│   │ Deployment  │ │   Service   │ (annotated with context)        │
-│   └─────────────┘ └─────────────┘                                  │
-└────────────────────────────────────────────────────────────────────┘
-                        │
-                        │ OTel Resource Detector
-                        ▼
-┌────────────────────────────────────────────────────────────────────┐
-│                     OBSERVABILITY LAYER                             │
-│   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐                 │
-│   │ Traces  │ │ Metrics │ │  Logs   │ │ Alerts  │                 │
-│   │+project │ │+project │ │+project │ │+context │                 │
-│   └─────────┘ └─────────┘ └─────────┘ └─────────┘                 │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              SOURCES                                         │
+│                                                                              │
+│   Humans                          AI Agents                   Artifacts     │
+│   ├─ Guidance (CRD)               ├─ Claude                   ├─ Commits    │
+│   ├─ Constraints                  ├─ GPT                      ├─ PRs        │
+│   └─ Questions                    └─ Custom                   └─ CI/CD      │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     CONTEXTCORE SDK                                          │
+│                                                                              │
+│  For Humans                           For Agents                             │
+│  ├─ TaskTracker (spans)               ├─ InsightEmitter                      │
+│  ├─ TaskLogger (logs)                 ├─ InsightQuerier                      │
+│  └─ Git Integration                   ├─ GuidanceReader                      │
+│                                       └─ HandoffManager                      │
+│                                                                              │
+│  ProjectContext CRD v2 • Agent Semantic Conventions • Personalization       │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   │ OTLP
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     OBSERVABILITY STACK                                      │
+│                                                                              │
+│   Tempo (traces + insights) • Mimir (metrics) • Loki (logs)                 │
+│   Grafana (humans) • TraceQL (agents) • Any OTLP backend                    │
+│                                                                              │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  AUTO-PROVISIONED DASHBOARDS                                        │   │
+│   │  ├─ Project Portfolio Overview (all projects, health matrix)        │   │
+│   │  └─ Project Details (drill-down: burndown, kanban, blockers)        │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           CONSUMERS                                          │
+│                                                                              │
+│   Executives         Developers        Operators        AI Agents           │
+│   └─ Portfolio       └─ Task Detail    └─ Alerts        └─ TraceQL          │
+│      Dashboard          Dashboard                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Commands
+## CLI Reference
 
 ```bash
-# Create ProjectContext
-contextcore create --name my-context --project my-project --criticality high
+# Task tracking
+contextcore task start --id PROJ-123 --title "Feature" --type story
+contextcore task update --id PROJ-123 --status in_progress
+contextcore task block --id PROJ-123 --reason "Waiting on API"
+contextcore task complete --id PROJ-123
 
-# List ProjectContexts
-kubectl get projectcontexts
-kubectl get pctx  # short name
+# Sprint tracking
+contextcore sprint start --id sprint-3 --name "Sprint 3" --goal "Auth flow"
+contextcore sprint end --id sprint-3 --points 21
 
-# Sync from Jira
-contextcore sync jira --project MYPROJ --namespace default
+# Git integration
+contextcore git hook --type post-commit
+contextcore git link --commit abc123 --message "feat: auth [PROJ-123]"
+contextcore git test --message "fixes PROJ-456"
 
-# Generate observability artifacts
-contextcore generate --context default/my-context --output ./generated/
-
-# Annotate existing deployment
-contextcore annotate deployment/my-app --context my-context
-
-# Run controller locally
-contextcore controller --kubeconfig ~/.kube/config
+# Metrics
+contextcore metrics summary --project my-project
+contextcore metrics wip --project my-project
 ```
 
-## Integrations
+## Semantic Conventions
 
-### GitOps
+ContextCore extends OpenTelemetry semantic conventions:
 
-ProjectContext is just YAML — store it alongside your Helm charts:
+| Namespace | Purpose | Examples |
+|-----------|---------|----------|
+| `task.*` | Project tasks | `task.id`, `task.status`, `task.type` |
+| `sprint.*` | Sprint tracking | `sprint.id`, `sprint.goal` |
+| `project.*` | Project metadata | `project.id`, `project.epic` |
+| `business.*` | Business context | `business.criticality`, `business.owner` |
+| `agent.*` | Agent identity | `agent.id`, `agent.session_id`, `agent.type` |
+| `insight.*` | Agent insights | `insight.type`, `insight.confidence`, `insight.audience` |
+| `guidance.*` | Human direction | `guidance.constraint_id`, `guidance.question_id` |
+| `handoff.*` | Agent delegation | `handoff.from_agent`, `handoff.to_agent` |
 
-```
-my-app/
-├── Chart.yaml
-├── values.yaml
-├── templates/
-│   ├── deployment.yaml
-│   └── service.yaml
-└── projectcontext.yaml  # ← Versioned with your app
-```
+See [docs/semantic-conventions.md](docs/semantic-conventions.md) and [docs/agent-semantic-conventions.md](docs/agent-semantic-conventions.md) for full reference.
 
-### Incident Management
+## Documentation
 
-When PagerDuty fires:
-- Alert includes `design_doc`, `adr`, `owner`
-- Responder has immediate context
-- Post-incident traces to originating task
+- [CLAUDE.md](CLAUDE.md) — Technical documentation and design principles
+- [docs/PROJECT_MANAGEMENT_VISION.md](docs/PROJECT_MANAGEMENT_VISION.md) — Full vision and goals
+- [docs/semantic-conventions.md](docs/semantic-conventions.md) — Attribute reference
+- [docs/agent-semantic-conventions.md](docs/agent-semantic-conventions.md) — Agent attribute reference
+- [docs/agent-communication-protocol.md](docs/agent-communication-protocol.md) — Agent integration protocols
+- [crds/projectcontext-v2.yaml](crds/projectcontext-v2.yaml) — CRD schema with agent guidance
 
-### Project Tools
+### Dashboard Specifications
 
-Sync adapters for bidirectional updates:
-- **Jira** → ProjectContext (requirements, tasks)
-- **GitHub Issues** → ProjectContext (tasks)
-- **Notion** → ProjectContext (design docs)
-- **Runtime incidents** → Jira/GitHub (feedback loop)
-
-## Why CRD?
-
-| Approach | Problem |
-|----------|---------|
-| Annotations only | No schema, scattered, no lifecycle |
-| External database | Disconnected from K8s, drift |
-| ConfigMaps | No validation, no controller |
-
-**ProjectContext CRD provides:**
-- Schema validation
-- Controller reconciliation
-- Single source of truth
-- K8s-native RBAC
-- Audit logging
-- GitOps compatible
+- [docs/dashboards/PROJECT_PORTFOLIO_OVERVIEW.md](docs/dashboards/PROJECT_PORTFOLIO_OVERVIEW.md) — Portfolio dashboard design
+- [docs/dashboards/PROJECT_DETAILS.md](docs/dashboards/PROJECT_DETAILS.md) — Project drill-down dashboard design
 
 ## Requirements
 
-- Kubernetes 1.24+
-- Python 3.11+ (for CLI/controller)
-- OpenTelemetry-compatible backend (optional)
+- Python 3.11+
+- Any OTLP-compatible backend (Grafana stack reference implementation included)
 
 ## Installation
 
 ```bash
-# CLI only
+# Core SDK
 pip install contextcore
-
-# With sync adapters
-pip install contextcore[sync]
 
 # Development
 pip install contextcore[dev]
 ```
 
-## Documentation
-
-- [CLAUDE.md](CLAUDE.md) - Full technical documentation
-- [Semantic Conventions](docs/semantic-conventions.md) - Attribute reference
-- [CRD Schema](crds/projectcontext.yaml) - Full CRD specification
-
 ## License
 
 MIT
+
+---
+
+**ContextCore** — The first project management system built for human-agent parity. Same metadata, same queries—for humans AND agents. One system. Every audience. Always current.

@@ -3,6 +3,9 @@ Pydantic models for ProjectContext CRD specification.
 
 These models provide Python type safety and validation for the ProjectContext
 custom resource, matching the OpenAPI schema defined in crds/projectcontext.yaml.
+
+Note: Core type enums (Criticality, BusinessValue, etc.) are imported from
+contextcore.contracts.types which is the single source of truth.
 """
 
 from __future__ import annotations
@@ -10,58 +13,22 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
-
-class Criticality(str, Enum):
-    """Business criticality levels."""
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-class BusinessValue(str, Enum):
-    """Business value classifications."""
-    REVENUE_PRIMARY = "revenue-primary"
-    REVENUE_SECONDARY = "revenue-secondary"
-    COST_REDUCTION = "cost-reduction"
-    COMPLIANCE = "compliance"
-    ENABLER = "enabler"
-    INTERNAL = "internal"
-
-
-class RiskType(str, Enum):
-    """Risk category types."""
-    SECURITY = "security"
-    COMPLIANCE = "compliance"
-    DATA_INTEGRITY = "data-integrity"
-    AVAILABILITY = "availability"
-    FINANCIAL = "financial"
-    REPUTATIONAL = "reputational"
-
-
-class AlertPriority(str, Enum):
-    """Alert priority levels."""
-    P1 = "P1"
-    P2 = "P2"
-    P3 = "P3"
-    P4 = "P4"
-
-
-class DashboardPlacement(str, Enum):
-    """Dashboard visibility levels."""
-    FEATURED = "featured"
-    STANDARD = "standard"
-    ARCHIVED = "archived"
-
-
-class LogLevel(str, Enum):
-    """Recommended log levels."""
-    DEBUG = "debug"
-    INFO = "info"
-    WARN = "warn"
-    ERROR = "error"
+# Import core types from central location
+from contextcore.contracts.types import (
+    AlertPriority,
+    BusinessValue,
+    Criticality,
+    DashboardPlacement,
+    LogLevel,
+    RiskType,
+)
+from contextcore.contracts.validators import (
+    duration_validator,
+    percentage_validator,
+    throughput_validator,
+)
 
 
 class TargetKind(str, Enum):
@@ -104,12 +71,21 @@ class BusinessSpec(BaseModel):
 
 class RequirementsSpec(BaseModel):
     """SLO requirements for derivation."""
-    availability: Optional[str] = Field(None, description="Target availability %")
-    latency_p50: Optional[str] = Field(None, alias="latencyP50", description="Target P50 latency")
-    latency_p99: Optional[str] = Field(None, alias="latencyP99", description="Target P99 latency")
-    error_budget: Optional[str] = Field(None, alias="errorBudget", description="Error budget %")
-    throughput: Optional[str] = Field(None, description="Target throughput")
+    availability: Optional[str] = Field(None, description="Target availability % (e.g., '99.95')")
+    latency_p50: Optional[str] = Field(None, alias="latencyP50", description="Target P50 latency (e.g., '50ms')")
+    latency_p99: Optional[str] = Field(None, alias="latencyP99", description="Target P99 latency (e.g., '200ms')")
+    error_budget: Optional[str] = Field(None, alias="errorBudget", description="Error budget % (e.g., '0.05')")
+    throughput: Optional[str] = Field(None, description="Target throughput (e.g., '1000rps')")
     source: Optional[str] = Field(None, description="Requirements source")
+
+    model_config = {"populate_by_name": True}
+
+    # Validators for field formats
+    _validate_availability = field_validator("availability", mode="before")(percentage_validator)
+    _validate_error_budget = field_validator("error_budget", mode="before")(percentage_validator)
+    _validate_latency_p50 = field_validator("latency_p50", mode="before")(duration_validator)
+    _validate_latency_p99 = field_validator("latency_p99", mode="before")(duration_validator)
+    _validate_throughput = field_validator("throughput", mode="before")(throughput_validator)
 
 
 class RiskSpec(BaseModel):
@@ -134,7 +110,7 @@ class ObservabilitySpec(BaseModel):
         None, alias="traceSampling", ge=0, le=1, description="Trace sampling rate"
     )
     metrics_interval: Optional[str] = Field(
-        None, alias="metricsInterval", description="Metrics scrape interval"
+        None, alias="metricsInterval", description="Metrics scrape interval (e.g., '10s', '30s')"
     )
     log_level: Optional[LogLevel] = Field(None, alias="logLevel", description="Log level")
     dashboard_placement: Optional[DashboardPlacement] = Field(
@@ -144,6 +120,11 @@ class ObservabilitySpec(BaseModel):
         default_factory=list, alias="alertChannels", description="Alert channels"
     )
     runbook: Optional[HttpUrl] = Field(None, description="Runbook URL")
+
+    model_config = {"populate_by_name": True}
+
+    # Validators for field formats
+    _validate_metrics_interval = field_validator("metrics_interval", mode="before")(duration_validator)
 
 
 class ProjectContextSpec(BaseModel):
@@ -156,8 +137,7 @@ class ProjectContextSpec(BaseModel):
     targets: List[TargetSpec] = Field(..., min_length=1)
     observability: Optional[ObservabilitySpec] = None
 
-    class Config:
-        populate_by_name = True
+    model_config = {"populate_by_name": True}
 
 
 class GeneratedArtifacts(BaseModel):

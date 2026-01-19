@@ -21,6 +21,7 @@ Commands:
     contextcore dashboards Provision Grafana dashboards
     contextcore ops        Operational health and backup
     contextcore install    Installation verification
+    contextcore graph      Knowledge graph commands (Phase 3)
 """
 
 import click
@@ -46,6 +47,9 @@ from .core import create, annotate, generate, runbook, controller
 from .review import review
 from .contract import contract
 from .slo_tests import slo_tests
+
+# Phase 3 commands
+from .graph import graph
 
 
 @click.group()
@@ -82,6 +86,9 @@ main.add_command(knowledge)
 main.add_command(review)
 main.add_command(contract)
 main.add_command(slo_tests, name="slo-tests")
+
+# Phase 3 command groups
+main.add_command(graph)
 
 
 if __name__ == "__main__":

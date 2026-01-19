@@ -312,3 +312,79 @@ spec:
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp
+
+    # v1alpha1 - Simplified flat schema for backwards compatibility
+    - name: v1alpha1
+      served: true
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - project
+                - service
+              properties:
+                project:
+                  type: string
+                  description: "Project identifier"
+                service:
+                  type: string
+                  description: "Service name"
+                criticality:
+                  type: string
+                  enum:
+                    - critical
+                    - high
+                    - medium
+                    - low
+                  default: medium
+                  description: "Business criticality level"
+                owner:
+                  type: string
+                  description: "Owning team or individual"
+                links:
+                  type: object
+                  properties:
+                    repository:
+                      type: string
+                      format: uri
+                      description: "Repository URL"
+                    documentation:
+                      type: string
+                      format: uri
+                      description: "Documentation URL"
+                    runbook:
+                      type: string
+                      format: uri
+                      description: "Runbook URL"
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending
+                    - Active
+                    - Degraded
+                    - Error
+                  description: "Current phase of the ProjectContext"
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Project
+          type: string
+          jsonPath: .spec.project
+        - name: Service
+          type: string
+          jsonPath: .spec.service
+        - name: Criticality
+          type: string
+          jsonPath: .spec.criticality
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
