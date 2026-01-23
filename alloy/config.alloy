@@ -1,0 +1,82 @@
+// Grafana Alloy configuration for ContextCore observability
+// This collects OTLP telemetry and forwards to the observability stack:
+// - Traces -> Tempo
+// - Metrics -> Mimir (via Prometheus remote write)
+// - Logs -> Loki
+
+// =============================================================================
+// OTLP Receiver
+// =============================================================================
+// Receives OTLP data via gRPC (4317) and HTTP (4318)
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+// =============================================================================
+// Batch Processor
+// =============================================================================
+// Batches telemetry for efficient export
+otelcol.processor.batch "default" {
+  timeout = "5s"
+  send_batch_size = 1000
+
+  output {
+    metrics = [otelcol.exporter.prometheus.mimir.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// =============================================================================
+// Metrics Export (OTLP -> Prometheus -> Mimir)
+// =============================================================================
+// Convert OTLP metrics to Prometheus format and forward to Mimir
+// NOTE: Unit suffixes are appended automatically:
+// - % -> _percent
+// - 1 -> _ratio
+// - ms -> _milliseconds
+otelcol.exporter.prometheus "mimir" {
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://mimir.observability.svc.cluster.local:9009/api/v1/push"
+  }
+}
+
+// =============================================================================
+// Logs Export (OTLP -> Loki)
+// =============================================================================
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki.observability.svc.cluster.local:3100/loki/api/v1/push"
+  }
+}
+
+// =============================================================================
+// Traces Export (OTLP -> Tempo)
+// =============================================================================
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo.observability.svc.cluster.local:4317"
+    tls {
+      insecure = true
+    }
+  }
+}

@@ -25,6 +25,7 @@ from contextcore.contracts.timeouts import (
     RETRYABLE_HTTP_STATUS_CODES,
     HTTP_CLIENT_TIMEOUT_S,
 )
+from contextcore.compat.otel_genai import mapper
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,8 @@ class InsightEmitter:
         expires_at: datetime | None = None,
         applies_to: list[str] | None = None,
         category: str | None = None,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> Insight:
         """
         Emit an insight as an OTel span.
@@ -155,6 +158,8 @@ class InsightEmitter:
             expires_at: When insight becomes stale
             applies_to: File paths/patterns this insight applies to
             category: Category for grouping (e.g., "testing", "architecture")
+            provider: LLM provider (e.g. "openai", "anthropic"). Auto-detected if None.
+            model: LLM model name (e.g. "gpt-4o"). Auto-detected if None.
 
         Returns:
             The emitted Insight with trace_id populated
@@ -163,33 +168,64 @@ class InsightEmitter:
         evidence = evidence or []
         applies_to = applies_to or []
 
+        # Auto-detect provider/model if not specified
+        if not provider or not model:
+            import os
+            # Simple heuristic: check env vars or service name
+            # This is a basic implementation - could be enhanced to check actual LLM client config
+            svc = os.environ.get("OTEL_SERVICE_NAME", "")
+            if not provider:
+                if "claude" in svc or "anthropic" in svc:
+                    provider = "anthropic"
+                elif "gpt" in svc or "openai" in svc:
+                    provider = "openai"
+                
+            if not model:
+                # Try to extract model from service name if it looks like "provider-model"
+                parts = svc.split("-")
+                if len(parts) > 1 and parts[0] in ("claude", "gpt", "gemini"):
+                    model = svc  # Use full service name as proxy for model
+
         with self.tracer.start_as_current_span(
             f"insight.{insight_type.value}",
             kind=SpanKind.INTERNAL,
         ) as span:
-            # Core attributes
-            span.set_attribute("insight.id", insight_id)
-            span.set_attribute("insight.type", insight_type.value)
-            span.set_attribute("insight.summary", summary)
-            span.set_attribute("insight.confidence", confidence)
-            span.set_attribute("insight.audience", audience.value)
+            # Build attributes dict for mapping
+            attributes = {
+                "insight.id": insight_id,
+                "insight.type": insight_type.value,
+                "insight.summary": summary,
+                "insight.confidence": confidence,
+                "insight.audience": audience.value,
+                "project.id": self.project_id,
+                "agent.id": self.agent_id,
+                "agent.session_id": self.session_id,
+                "gen_ai.operation.name": "insight.emit",
+            }
 
-            # Context linking
-            span.set_attribute("project.id", self.project_id)
-            span.set_attribute("agent.id", self.agent_id)
-            span.set_attribute("agent.session_id", self.session_id)
+            if provider:
+                attributes["gen_ai.system"] = provider  # OTel standard for provider
+            if model:
+                attributes["gen_ai.request.model"] = model
 
             # Optional attributes
             if rationale:
-                span.set_attribute("insight.rationale", rationale)
+                attributes["insight.rationale"] = rationale
             if supersedes:
-                span.set_attribute("insight.supersedes", supersedes)
+                attributes["insight.supersedes"] = supersedes
             if expires_at:
-                span.set_attribute("insight.expires_at", expires_at.isoformat())
+                attributes["insight.expires_at"] = expires_at.isoformat()
             if applies_to:
-                span.set_attribute("insight.applies_to", applies_to)
+                attributes["insight.applies_to"] = applies_to
             if category:
-                span.set_attribute("insight.category", category)
+                attributes["insight.category"] = category
+
+            # Map attributes (dual-emit support)
+            mapped_attrs = mapper.map_attributes(attributes)
+            
+            # Set attributes on span
+            for key, value in mapped_attrs.items():
+                span.set_attribute(key, value)
 
             # Add evidence as events
             for ev in evidence:

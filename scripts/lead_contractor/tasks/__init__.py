@@ -19,6 +19,9 @@ Phase 4: Unified Protocol Alignment (combined OTel GenAI + A2A)
 - CORE_OTEL_FEATURES: operation.name, conversation.id (2 Python features)
 - EXTENDED_OTEL_FEATURES: provider/model, tool mapping (2 Python features)
 - DOCS_FEATURES: Unified documentation update (1 feature)
+
+Installation Tracking & Resume Plan
+- INSTALL_TRACKING_FEATURES: Resumable installation system (6 Bash features)
 """
 
 # Phase 3 features
@@ -39,6 +42,9 @@ from .unified_api import API_FEATURES
 from .unified_otel import CORE_OTEL_FEATURES, EXTENDED_OTEL_FEATURES
 from .unified_docs import DOCS_FEATURES
 
+# Installation Tracking & Resume Plan
+from .install_tracking import INSTALL_TRACKING_FEATURES
+
 __all__ = [
     # Phase 3
     "GRAPH_FEATURES",
@@ -56,4 +62,6 @@ __all__ = [
     "CORE_OTEL_FEATURES",
     "EXTENDED_OTEL_FEATURES",
     "DOCS_FEATURES",
+    # Installation Tracking
+    "INSTALL_TRACKING_FEATURES",
 ]

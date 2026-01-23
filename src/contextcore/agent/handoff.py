@@ -26,15 +26,20 @@ import asyncio
 import logging
 import time
 import uuid
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, AsyncIterator, Optional
 
+from opentelemetry import trace
+from opentelemetry.trace import SpanKind, Status, StatusCode
+
 from contextcore.contracts.timeouts import (
     HANDOFF_DEFAULT_TIMEOUT_MS,
     HANDOFF_POLL_INTERVAL_S,
 )
+from contextcore.compat.otel_genai import mapper
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +166,7 @@ class HandoffManager:
             kwargs["kubeconfig"] = kubeconfig
 
         self._storage = get_storage(storage_type=storage_type_enum, **kwargs)
+        self.tracer = trace.get_tracer("contextcore.handoff")
         logger.info(
             f"HandoffManager initialized for project {project_id}, "
             f"agent {agent_id}, storage {type(self._storage).__name__}"
@@ -186,25 +192,58 @@ class HandoffManager:
 
         handoff_id = f"handoff-{uuid.uuid4().hex[:12]}"
 
-        handoff_data = HandoffData(
-            id=handoff_id,
-            from_agent=self.agent_id,
-            to_agent=to_agent,
-            capability_id=capability_id,
-            task=task,
-            inputs=inputs,
-            expected_output={
-                "type": expected_output.type,
-                "fields": expected_output.fields,
-            },
-            priority=priority.value,
-            timeout_ms=timeout_ms,
-            status=HandoffStatus.PENDING.value,
-            created_at=datetime.now(timezone.utc),
-        )
+        # Start span for handoff creation
+        with self.tracer.start_as_current_span(
+            "handoff.request",
+            kind=SpanKind.PRODUCER,
+        ) as span:
+            # Prepare arguments JSON
+            try:
+                args_json = json.dumps(inputs)
+            except (TypeError, ValueError):
+                args_json = str(inputs)
 
-        self._storage.save_handoff(self.project_id, handoff_data)
-        logger.info(f"Created handoff {handoff_id} to agent {to_agent}")
+            attributes = {
+                "handoff.id": handoff_id,
+                "handoff.from_agent": self.agent_id,
+                "handoff.to_agent": to_agent,
+                "handoff.capability_id": capability_id,
+                "handoff.priority": priority.value,
+                "project.id": self.project_id,
+                "gen_ai.operation.name": "handoff.request",
+                
+                # OTel Tool Attributes (Task 5)
+                "gen_ai.tool.name": capability_id,
+                "gen_ai.tool.type": "agent_handoff",
+                "gen_ai.tool.call.id": handoff_id,
+                "gen_ai.tool.call.arguments": args_json,
+            }
+            
+            # Map attributes
+            attributes = mapper.map_attributes(attributes)
+            for k, v in attributes.items():
+                span.set_attribute(k, v)
+
+            handoff_data = HandoffData(
+                id=handoff_id,
+                from_agent=self.agent_id,
+                to_agent=to_agent,
+                capability_id=capability_id,
+                task=task,
+                inputs=inputs,
+                expected_output={
+                    "type": expected_output.type,
+                    "fields": expected_output.fields,
+                },
+                priority=priority.value,
+                timeout_ms=timeout_ms,
+                status=HandoffStatus.PENDING.value,
+                created_at=datetime.now(timezone.utc),
+            )
+
+            self._storage.save_handoff(self.project_id, handoff_data)
+            span.set_status(Status(StatusCode.OK))
+            logger.info(f"Created handoff {handoff_id} to agent {to_agent}")
 
         return handoff_id
 
