@@ -8,6 +8,7 @@ Complete installation guide for ContextCore observability stack.
 |--------------|-------|
 | Get started fast (solo dev) | [Docker Compose Quick Start](#option-a-docker-compose) |
 | Use Kubernetes patterns | [Kind Cluster Quick Start](#option-b-kind-cluster) |
+| Use the interactive TUI | [Terminal User Interface](#terminal-user-interface-tui) |
 | Troubleshoot issues | [Troubleshooting](#troubleshooting) |
 | Verify my installation | [Verification](#verification) |
 
@@ -279,6 +280,100 @@ kubectl delete namespace observability
 
 ---
 
+## Terminal User Interface (TUI)
+
+> **New in v0.1.0:** ContextCore includes an interactive TUI for guided installation and monitoring.
+
+### Launch the TUI
+
+```bash
+cd ~/Documents/dev/ContextCore
+source .venv/bin/activate
+
+# Launch the welcome screen
+contextcore tui launch
+
+# Jump directly to a specific screen
+contextcore tui launch --screen install      # Installation wizard
+contextcore tui launch --screen status       # Service health dashboard
+contextcore tui launch --screen configure    # Environment configuration
+contextcore tui launch --screen script_generator  # Generate install scripts
+```
+
+### TUI Screens
+
+| Screen | Key | Description |
+|--------|-----|-------------|
+| Welcome | - | Main menu with navigation cards |
+| Install | `I` | 5-step guided installation wizard |
+| Status | `S` | Real-time service health monitoring |
+| Configure | `C` | Edit environment variables, test endpoints |
+| Script Generator | `G` | Generate custom installation scripts |
+| Help | `H` | Keyboard shortcuts and documentation |
+
+### Installation Wizard (TUI)
+
+The TUI installation wizard guides you through:
+
+1. **Prerequisites Check** - Verifies Python, Docker, ports, etc.
+2. **Deployment Method** - Choose Docker Compose, Kind, or Custom
+3. **Configuration** - Set endpoints, credentials
+4. **Deployment** - Runs `make full-setup` or creates Kind cluster
+5. **Verification** - Confirms services are healthy
+
+```bash
+# Launch directly to install wizard
+contextcore tui install
+
+# Non-interactive install with defaults
+contextcore tui install --method docker --auto
+```
+
+### Service Status (TUI)
+
+Monitor service health in real-time:
+
+```bash
+# Interactive dashboard with auto-refresh
+contextcore tui status
+
+# JSON output for scripting
+contextcore tui status --json
+
+# Continuous watch mode
+contextcore tui status --watch
+```
+
+### Script Generator
+
+Generate custom installation scripts for your environment:
+
+```bash
+# Interactive TUI
+contextcore tui launch --screen script_generator
+
+# CLI script generation
+contextcore tui generate-script --method docker
+contextcore tui generate-script --method kind -o install.sh
+```
+
+The script generator supports:
+- **Docker Compose** - Uses `make full-setup`
+- **Kind Cluster** - Creates cluster and deploys stack
+- **Custom** - Connects to existing infrastructure
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit |
+| `?` | Help |
+| `Esc` | Go back / Cancel |
+| `d` | Toggle dark/light mode |
+| `Tab` | Navigate between elements |
+
+---
+
 ## Verification
 
 ### Health Checks
@@ -534,9 +629,16 @@ After installation:
    contextcore --help
    contextcore task --help
    contextcore install --help
+   contextcore tui --help
    ```
 
-4. **Read the documentation:**
+4. **Try the TUI:**
+   ```bash
+   contextcore tui launch           # Interactive welcome screen
+   contextcore tui status --json    # Quick health check
+   ```
+
+5. **Read the documentation:**
    - [README.md](../README.md) - Vision and concepts
    - [docs/semantic-conventions.md](semantic-conventions.md) - Attribute reference
    - [CLAUDE.md](../CLAUDE.md) - Developer reference
