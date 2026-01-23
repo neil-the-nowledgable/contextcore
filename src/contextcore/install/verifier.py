@@ -11,7 +11,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Callable, Optional
 
 from opentelemetry import metrics, trace
 from opentelemetry.trace import Status, StatusCode
@@ -30,7 +30,22 @@ logger = logging.getLogger(__name__)
 tracer = trace.get_tracer("contextcore.install")
 meter = metrics.get_meter("contextcore.install")
 
+# =============================================================================
 # Metrics
+# =============================================================================
+# NOTE: OTel to Prometheus metric name conversion:
+# - Dots (.) become underscores (_)
+# - Unit suffixes are appended: % -> _percent, 1 -> _ratio, ms -> _milliseconds
+#
+# OTel Name                              -> Prometheus Name
+# contextcore.install.completeness (%)   -> contextcore_install_completeness_percent
+# contextcore.install.requirement.status -> contextcore_install_requirement_status_ratio
+# contextcore.install.category.completeness -> contextcore_install_category_completeness_percent
+# contextcore.install.verification.duration -> contextcore_install_verification_duration_milliseconds
+# contextcore.install.critical.met       -> contextcore_install_critical_met_ratio
+# contextcore.install.critical.total     -> contextcore_install_critical_total_ratio
+# =============================================================================
+
 installation_completeness = meter.create_gauge(
     name="contextcore.install.completeness",
     description="Installation completeness percentage (0-100)",
@@ -388,6 +403,7 @@ class InstallationVerifier:
                 "contextcore.install.categories": (
                     [c.value for c in categories] if categories else "all"
                 ),
+                "gen_ai.operation.name": "install.verify",
             },
         ) as parent_span:
             # Check each requirement
@@ -470,6 +486,254 @@ class InstallationVerifier:
             )
 
             self._emit_summary_telemetry(verification_result)
+
+            return verification_result
+
+    def verify_debug(
+        self,
+        categories: Optional[list[RequirementCategory]] = None,
+        step_all: bool = False,
+        on_checkpoint: Optional[
+            Callable[
+                ["DebugCheckpointData", list["RequirementResult"], "CategoryResult"],
+                bool,
+            ]
+        ] = None,
+    ) -> VerificationResult:
+        """
+        Run verification in debug mode with checkpoints for step-by-step validation.
+
+        Args:
+            categories: Specific categories to check (defaults to all)
+            step_all: If True, checkpoint after each requirement; otherwise after each category
+            on_checkpoint: Callback function called at each checkpoint.
+                          Receives (checkpoint_data, requirement_results, category_result).
+                          Returns True to continue, False to abort.
+
+        Returns:
+            VerificationResult with all check results and metrics
+        """
+        from contextcore.install.debug_display import DebugCheckpoint, EmittedMetric
+
+        start = time.perf_counter()
+        self._results_cache.clear()
+
+        # Filter requirements by category if specified
+        requirements = self.requirements
+        if categories:
+            requirements = [r for r in requirements if r.category in categories]
+
+        # Group requirements by category for category-level checkpoints
+        requirements_by_category: dict[RequirementCategory, list[InstallationRequirement]] = {}
+        for req in requirements:
+            if req.category not in requirements_by_category:
+                requirements_by_category[req.category] = []
+            requirements_by_category[req.category].append(req)
+
+        # Calculate total checkpoints
+        if step_all:
+            total_checkpoints = len(requirements)
+        else:
+            total_checkpoints = len(requirements_by_category)
+
+        results: list[RequirementResult] = []
+        checkpoint_number = 0
+        aborted = False
+
+        # Create parent span for entire verification
+        with tracer.start_as_current_span(
+            "contextcore.install.verify.debug",
+            attributes={
+                "contextcore.install.total_requirements": len(requirements),
+                "contextcore.install.debug_mode": True,
+                "contextcore.install.step_all": step_all,
+                "gen_ai.operation.name": "install.verify.debug",
+            },
+        ) as parent_span:
+            if step_all:
+                # Checkpoint after each requirement
+                for req in requirements:
+                    result = self._check_requirement(req)
+                    results.append(result)
+                    self._emit_requirement_telemetry(result, parent_span)
+
+                    checkpoint_number += 1
+
+                    # Build emitted metrics for this requirement
+                    emitted_metrics = [
+                        EmittedMetric(
+                            name="contextcore_install_requirement_status_ratio",
+                            value=1.0 if result.passed else 0.0,
+                            labels={
+                                "requirement_id": req.id,
+                                "requirement_name": req.name,
+                                "category": req.category.value,
+                                "critical": str(req.critical).lower(),
+                            },
+                        )
+                    ]
+
+                    if on_checkpoint:
+                        checkpoint = DebugCheckpoint(
+                            checkpoint_type="requirement",
+                            checkpoint_number=checkpoint_number,
+                            total_checkpoints=total_checkpoints,
+                            requirement_result=result,
+                            emitted_metrics=emitted_metrics,
+                        )
+                        if not on_checkpoint(checkpoint):
+                            aborted = True
+                            break
+            else:
+                # Checkpoint after each category
+                for cat, cat_requirements in requirements_by_category.items():
+                    cat_results: list[RequirementResult] = []
+
+                    for req in cat_requirements:
+                        result = self._check_requirement(req)
+                        results.append(result)
+                        cat_results.append(result)
+                        self._emit_requirement_telemetry(result, parent_span)
+
+                    checkpoint_number += 1
+
+                    # Calculate category result
+                    category_result = CategoryResult(
+                        category=cat,
+                        total=len(cat_results),
+                        passed=sum(1 for r in cat_results if r.passed),
+                        failed=sum(
+                            1 for r in cat_results if r.status == RequirementStatus.FAILED
+                        ),
+                        skipped=sum(
+                            1 for r in cat_results if r.status == RequirementStatus.SKIPPED
+                        ),
+                        errors=sum(
+                            1 for r in cat_results if r.status == RequirementStatus.ERROR
+                        ),
+                    )
+
+                    # Build emitted metrics for this category
+                    emitted_metrics = []
+                    for r in cat_results:
+                        emitted_metrics.append(
+                            EmittedMetric(
+                                name="contextcore_install_requirement_status_ratio",
+                                value=1.0 if r.passed else 0.0,
+                                labels={
+                                    "requirement_id": r.requirement.id,
+                                    "requirement_name": r.requirement.name,
+                                    "category": r.requirement.category.value,
+                                    "critical": str(r.requirement.critical).lower(),
+                                },
+                            )
+                        )
+
+                    # Add category completeness metric
+                    emitted_metrics.append(
+                        EmittedMetric(
+                            name="contextcore_install_category_completeness_percent",
+                            value=category_result.completeness,
+                            labels={
+                                "installation_id": "contextcore",
+                                "category": cat.value,
+                            },
+                        )
+                    )
+
+                    if on_checkpoint:
+                        checkpoint = DebugCheckpoint(
+                            checkpoint_type="category",
+                            checkpoint_number=checkpoint_number,
+                            total_checkpoints=total_checkpoints,
+                            category_result=category_result,
+                            category_requirements=cat_results,
+                            emitted_metrics=emitted_metrics,
+                        )
+                        if not on_checkpoint(checkpoint):
+                            aborted = True
+                            break
+
+            # Calculate final results (even if aborted, return what we have)
+            category_results: dict[RequirementCategory, CategoryResult] = {}
+            for cat in RequirementCategory:
+                cat_reqs = [r for r in results if r.requirement.category == cat]
+                if cat_reqs:
+                    category_results[cat] = CategoryResult(
+                        category=cat,
+                        total=len(cat_reqs),
+                        passed=sum(1 for r in cat_reqs if r.passed),
+                        failed=sum(
+                            1
+                            for r in cat_reqs
+                            if r.status == RequirementStatus.FAILED
+                        ),
+                        skipped=sum(
+                            1
+                            for r in cat_reqs
+                            if r.status == RequirementStatus.SKIPPED
+                        ),
+                        errors=sum(
+                            1
+                            for r in cat_reqs
+                            if r.status == RequirementStatus.ERROR
+                        ),
+                    )
+
+            # Calculate totals
+            total = len(results)
+            passed = sum(1 for r in results if r.passed)
+            failed = total - passed
+
+            critical_results = [r for r in results if r.requirement.critical]
+            critical_met = sum(1 for r in critical_results if r.passed)
+            critical_total = len(critical_results)
+
+            completeness = (passed / total * 100) if total > 0 else 100.0
+            is_complete = critical_met == critical_total and not aborted
+
+            duration_ms = (time.perf_counter() - start) * 1000
+
+            verification_result = VerificationResult(
+                results=results,
+                categories=category_results,
+                total_requirements=total,
+                passed_requirements=passed,
+                failed_requirements=failed,
+                critical_met=critical_met,
+                critical_total=critical_total,
+                completeness=completeness,
+                duration_ms=duration_ms,
+                verified_at=datetime.now(timezone.utc).isoformat(),
+                is_complete=is_complete,
+            )
+
+            # Set final span status
+            if is_complete:
+                parent_span.set_status(Status(StatusCode.OK))
+            elif aborted:
+                parent_span.set_status(
+                    Status(StatusCode.ERROR, "Verification aborted by user")
+                )
+            else:
+                parent_span.set_status(
+                    Status(
+                        StatusCode.ERROR,
+                        f"Installation incomplete: {critical_met}/{critical_total} critical",
+                    )
+                )
+
+            parent_span.set_attribute("contextcore.install.aborted", aborted)
+            parent_span.set_attribute(
+                "contextcore.install.completeness", completeness
+            )
+            parent_span.set_attribute("contextcore.install.is_complete", is_complete)
+            parent_span.set_attribute(
+                "contextcore.install.critical_met", critical_met
+            )
+
+            if not aborted:
+                self._emit_summary_telemetry(verification_result)
 
             return verification_result
 
