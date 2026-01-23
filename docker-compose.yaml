@@ -51,14 +51,15 @@ services:
   # ==========================================================================
   # Tempo - Distributed Tracing
   # ==========================================================================
+  # Note: OTLP ports (4317/4318) are NOT exposed to host - Alloy is the OTLP ingestion point.
+  # Tempo still listens on 4317 internally for Alloy to forward traces to.
   tempo:
     image: grafana/tempo:2.6.1
     container_name: contextcore-tempo
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     ports:
-      - "3200:3200"   # Tempo HTTP
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
+      - "3200:3200"   # Tempo HTTP API (for queries)
+      # OTLP ports handled by Alloy - see alloy service below
     volumes:
       - ./data/tempo:/var/tempo
       - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
@@ -111,23 +112,37 @@ services:
       - contextcore
 
   # ==========================================================================
-  # Alloy - OpenTelemetry Collector (optional, for receiving from remote)
+  # Alloy - OpenTelemetry Collector (OTLP ingestion point)
   # ==========================================================================
-  # Uncomment if you need a collector between your app and backends
-  # alloy:
-  #   image: grafana/alloy:v1.5.1
-  #   container_name: contextcore-alloy
-  #   command: ["run", "/etc/alloy/config.alloy"]
-  #   ports:
-  #     - "12345:12345"  # Alloy UI
-  #   volumes:
-  #     - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
-  #   depends_on:
-  #     - tempo
-  #     - mimir
-  #     - loki
-  #   networks:
-  #     - contextcore
+  # Alloy is the SINGLE OTLP ingestion point for all telemetry:
+  # - Receives OTLP on 4317 (gRPC) and 4318 (HTTP)
+  # - Routes traces to Tempo
+  # - Routes metrics to Mimir (via Prometheus remote_write)
+  # - Routes logs to Loki
+  alloy:
+    image: grafana/alloy:v1.5.1
+    container_name: contextcore-alloy
+    command: ["run", "/etc/alloy/config.docker.alloy", "--server.http.listen-addr=0.0.0.0:12345"]
+    ports:
+      - "4317:4317"   # OTLP gRPC - primary ingestion endpoint
+      - "4318:4318"   # OTLP HTTP
+      - "12345:12345" # Alloy UI (for debugging)
+    volumes:
+      - ./alloy/config.docker.alloy:/etc/alloy/config.docker.alloy:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:12345/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      tempo:
+        condition: service_healthy
+      mimir:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+    networks:
+      - contextcore
 
 networks:
   contextcore:

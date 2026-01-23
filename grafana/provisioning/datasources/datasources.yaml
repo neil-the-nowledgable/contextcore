@@ -1,11 +1,15 @@
 # ContextCore Grafana Datasources
 # Auto-provisioned on container start
+#
+# IMPORTANT: UIDs are lowercase to match dashboard variable defaults.
+# Dashboards use ${datasource} with default "mimir" and ${tempo} with default "tempo".
 
 apiVersion: 1
 
 datasources:
   # Tempo - Distributed Tracing
   - name: Tempo
+    uid: tempo  # Explicit UID - matches dashboard variables
     type: tempo
     access: proxy
     url: http://tempo:3200
@@ -31,6 +35,7 @@ datasources:
 
   # Mimir - Metrics (Prometheus-compatible)
   - name: Mimir
+    uid: mimir  # Explicit UID - matches dashboard variables
     type: prometheus
     access: proxy
     url: http://mimir:9009/prometheus
@@ -43,6 +48,7 @@ datasources:
 
   # Loki - Log Aggregation
   - name: Loki
+    uid: loki  # Explicit UID - matches dashboard variables
     type: loki
     access: proxy
     url: http://loki:3100

@@ -1,0 +1,72 @@
+// Grafana Alloy configuration for LOCAL ContextCore development
+// Uses localhost URLs for docker-compose or local services
+
+// =============================================================================
+// OTLP Receiver
+// =============================================================================
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+    traces  = [otelcol.processor.batch.default.input]
+  }
+}
+
+// =============================================================================
+// Batch Processor
+// =============================================================================
+otelcol.processor.batch "default" {
+  timeout = "5s"
+  send_batch_size = 1000
+
+  output {
+    metrics = [otelcol.exporter.prometheus.mimir.input]
+    logs    = [otelcol.exporter.loki.default.input]
+    traces  = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// =============================================================================
+// Metrics Export (OTLP -> Prometheus -> Mimir)
+// =============================================================================
+otelcol.exporter.prometheus "mimir" {
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+
+prometheus.remote_write "mimir" {
+  endpoint {
+    url = "http://localhost:9009/api/v1/push"
+  }
+}
+
+// =============================================================================
+// Logs Export (OTLP -> Loki)
+// =============================================================================
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://localhost:3100/loki/api/v1/push"
+  }
+}
+
+// =============================================================================
+// Traces Export (OTLP -> Tempo)
+// =============================================================================
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "localhost:4317"
+    tls {
+      insecure = true
+    }
+  }
+}

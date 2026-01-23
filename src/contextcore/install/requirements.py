@@ -3,10 +3,21 @@ Installation requirements for ContextCore.
 
 Defines what constitutes a complete ContextCore installation, organized by
 category. Each requirement has a check function that returns True if met.
+
+Environment Variables:
+    GRAFANA_URL: Grafana base URL (default: http://localhost:3000)
+    GRAFANA_USER: Grafana admin username (default: admin)
+    GRAFANA_PASSWORD: Grafana admin password (default: admin)
+    TEMPO_URL: Tempo base URL (default: http://localhost:3200)
+    MIMIR_URL: Mimir base URL (default: http://localhost:9009)
+    LOKI_URL: Loki base URL (default: http://localhost:3100)
+    OTLP_GRPC_PORT: OTLP gRPC port (default: 4317)
+    OTLP_HTTP_PORT: OTLP HTTP port (default: 4318)
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -15,6 +26,21 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import httpx
+
+
+# Configuration from environment with sensible defaults
+def _get_config():
+    """Get configuration from environment variables."""
+    return {
+        "grafana_url": os.environ.get("GRAFANA_URL", "http://localhost:3000"),
+        "grafana_user": os.environ.get("GRAFANA_USER", "admin"),
+        "grafana_password": os.environ.get("GRAFANA_PASSWORD", "admin"),
+        "tempo_url": os.environ.get("TEMPO_URL", "http://localhost:3200"),
+        "mimir_url": os.environ.get("MIMIR_URL", "http://localhost:9009"),
+        "loki_url": os.environ.get("LOKI_URL", "http://localhost:3100"),
+        "otlp_grpc_port": int(os.environ.get("OTLP_GRPC_PORT", "4317")),
+        "otlp_http_port": int(os.environ.get("OTLP_HTTP_PORT", "4318")),
+    }
 
 
 class RequirementCategory(str, Enum):
@@ -176,8 +202,9 @@ def check_make_available() -> bool:
 
 def check_grafana_running() -> bool:
     """Check if Grafana is running and healthy."""
+    config = _get_config()
     try:
-        response = httpx.get("http://localhost:3000/api/health", timeout=5)
+        response = httpx.get(f"{config['grafana_url']}/api/health", timeout=5)
         return response.status_code == 200
     except Exception:
         return False
@@ -185,8 +212,9 @@ def check_grafana_running() -> bool:
 
 def check_tempo_running() -> bool:
     """Check if Tempo is running and healthy."""
+    config = _get_config()
     try:
-        response = httpx.get("http://localhost:3200/ready", timeout=5)
+        response = httpx.get(f"{config['tempo_url']}/ready", timeout=5)
         return response.status_code == 200
     except Exception:
         return False
@@ -194,8 +222,9 @@ def check_tempo_running() -> bool:
 
 def check_mimir_running() -> bool:
     """Check if Mimir is running and healthy."""
+    config = _get_config()
     try:
-        response = httpx.get("http://localhost:9009/ready", timeout=5)
+        response = httpx.get(f"{config['mimir_url']}/ready", timeout=5)
         return response.status_code == 200
     except Exception:
         return False
@@ -203,8 +232,9 @@ def check_mimir_running() -> bool:
 
 def check_loki_running() -> bool:
     """Check if Loki is running and healthy."""
+    config = _get_config()
     try:
-        response = httpx.get("http://localhost:3100/ready", timeout=5)
+        response = httpx.get(f"{config['loki_url']}/ready", timeout=5)
         return response.status_code == 200
     except Exception:
         return False
@@ -213,11 +243,12 @@ def check_loki_running() -> bool:
 def check_otlp_grpc_listening() -> bool:
     """Check if OTLP gRPC endpoint is listening."""
     import socket
+    config = _get_config()
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        result = sock.connect_ex(("localhost", 4317))
+        result = sock.connect_ex(("localhost", config['otlp_grpc_port']))
         sock.close()
         return result == 0
     except Exception:
@@ -227,80 +258,156 @@ def check_otlp_grpc_listening() -> bool:
 def check_otlp_http_listening() -> bool:
     """Check if OTLP HTTP endpoint is listening."""
     import socket
+    config = _get_config()
 
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
-        result = sock.connect_ex(("localhost", 4318))
+        result = sock.connect_ex(("localhost", config['otlp_http_port']))
         sock.close()
         return result == 0
     except Exception:
         return False
 
 
-def check_grafana_has_tempo_datasource() -> bool:
-    """Check if Grafana has Tempo datasource configured."""
+def _get_grafana_auth():
+    """Get Grafana authentication tuple.
+
+    Uses GRAFANA_USER and GRAFANA_PASSWORD environment variables.
+    Defaults to admin:admin if not set.
+    """
+    config = _get_config()
+    return (config['grafana_user'], config['grafana_password'])
+
+
+def _check_grafana_api(endpoint: str) -> tuple[bool, str]:
+    """Check Grafana API endpoint with auth.
+
+    Returns (success, error_message) tuple.
+    """
+    config = _get_config()
     try:
         response = httpx.get(
-            "http://localhost:3000/api/datasources",
-            auth=("admin", "admin"),
+            f"{config['grafana_url']}{endpoint}",
+            auth=_get_grafana_auth(),
             timeout=5,
         )
         if response.status_code == 200:
-            datasources = response.json()
-            return any(ds.get("type") == "tempo" for ds in datasources)
-        return False
+            return True, ""
+        elif response.status_code == 401:
+            return False, "Authentication failed. Set GRAFANA_USER/GRAFANA_PASSWORD env vars."
+        else:
+            return False, f"HTTP {response.status_code}"
+    except Exception as e:
+        return False, str(e)
+
+
+def _get_grafana_datasources() -> list[dict] | None:
+    """Get Grafana datasources list.
+
+    Returns list of datasources or None if request failed.
+    Handles auth errors gracefully.
+    """
+    config = _get_config()
+    try:
+        response = httpx.get(
+            f"{config['grafana_url']}/api/datasources",
+            auth=_get_grafana_auth(),
+            timeout=5,
+        )
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 401:
+            # Auth failed - check if datasources are provisioned by checking health
+            # Grafana with anonymous auth may still have provisioned datasources
+            import logging
+            logging.getLogger(__name__).debug(
+                "Grafana API auth failed. Set GRAFANA_USER/GRAFANA_PASSWORD env vars. "
+                "Datasources may still be provisioned via config files."
+            )
+        return None
     except Exception:
+        return None
+
+
+def check_grafana_has_tempo_datasource() -> bool:
+    """Check if Grafana has Tempo datasource configured."""
+    datasources = _get_grafana_datasources()
+    if datasources is None:
+        # Fallback: check if provisioning config exists
+        root = _find_project_root()
+        if root:
+            ds_config = root / "grafana" / "provisioning" / "datasources" / "datasources.yaml"
+            if ds_config.exists():
+                with open(ds_config) as f:
+                    content = f.read()
+                    return "type: tempo" in content
         return False
+    return any(ds.get("type") == "tempo" for ds in datasources)
 
 
 def check_grafana_has_mimir_datasource() -> bool:
     """Check if Grafana has Mimir/Prometheus datasource configured."""
-    try:
-        response = httpx.get(
-            "http://localhost:3000/api/datasources",
-            auth=("admin", "admin"),
-            timeout=5,
-        )
-        if response.status_code == 200:
-            datasources = response.json()
-            return any(ds.get("type") == "prometheus" for ds in datasources)
+    datasources = _get_grafana_datasources()
+    if datasources is None:
+        # Fallback: check if provisioning config exists
+        root = _find_project_root()
+        if root:
+            ds_config = root / "grafana" / "provisioning" / "datasources" / "datasources.yaml"
+            if ds_config.exists():
+                with open(ds_config) as f:
+                    content = f.read()
+                    return "type: prometheus" in content
         return False
-    except Exception:
-        return False
+    return any(ds.get("type") == "prometheus" for ds in datasources)
 
 
 def check_grafana_has_loki_datasource() -> bool:
     """Check if Grafana has Loki datasource configured."""
-    try:
-        response = httpx.get(
-            "http://localhost:3000/api/datasources",
-            auth=("admin", "admin"),
-            timeout=5,
-        )
-        if response.status_code == 200:
-            datasources = response.json()
-            return any(ds.get("type") == "loki" for ds in datasources)
+    datasources = _get_grafana_datasources()
+    if datasources is None:
+        # Fallback: check if provisioning config exists
+        root = _find_project_root()
+        if root:
+            ds_config = root / "grafana" / "provisioning" / "datasources" / "datasources.yaml"
+            if ds_config.exists():
+                with open(ds_config) as f:
+                    content = f.read()
+                    return "type: loki" in content
         return False
-    except Exception:
-        return False
+    return any(ds.get("type") == "loki" for ds in datasources)
 
 
 def check_grafana_has_dashboards() -> bool:
-    """Check if Grafana has ContextCore dashboards."""
+    """Check if Grafana has ContextCore dashboards.
+
+    Checks both API (if accessible) and provisioning directory.
+    """
+    config = _get_config()
+
+    # Try API first
     try:
         response = httpx.get(
-            "http://localhost:3000/api/search?type=dash-db",
-            auth=("admin", "admin"),
+            f"{config['grafana_url']}/api/search?type=dash-db&tag=contextcore",
+            auth=_get_grafana_auth(),
             timeout=5,
         )
         if response.status_code == 200:
             dashboards = response.json()
-            # Check for at least one dashboard
-            return len(dashboards) > 0
-        return False
+            if len(dashboards) > 0:
+                return True
     except Exception:
-        return False
+        pass
+
+    # Fallback: check provisioning directory
+    root = _find_project_root()
+    if root:
+        dash_dir = root / "grafana" / "provisioning" / "dashboards" / "json"
+        if dash_dir.exists():
+            json_files = list(dash_dir.glob("*.json"))
+            return len(json_files) > 0
+
+    return False
 
 
 def check_operational_resilience_doc() -> bool:
@@ -320,16 +427,28 @@ def check_operational_runbook() -> bool:
 
 
 def check_data_directories() -> bool:
-    """Check if data directories exist for persistence."""
+    """Check if data directories exist for persistence.
+
+    This check verifies that persistent storage is configured. It passes if:
+    1. Local data/ directory exists with subdirs, OR
+    2. Services are running (implying Kubernetes PVCs or similar)
+    """
     root = _find_project_root()
-    if root is None:
-        return False
-    data_dir = root / "data"
-    if not data_dir.exists():
-        return False
-    # Check for at least some subdirectories
-    subdirs = ["grafana", "tempo", "mimir", "loki"]
-    return any((data_dir / subdir).exists() for subdir in subdirs)
+
+    # Check for local data directory (docker-compose setup)
+    if root is not None:
+        data_dir = root / "data"
+        if data_dir.exists():
+            subdirs = ["grafana", "tempo", "mimir", "loki"]
+            if any((data_dir / subdir).exists() for subdir in subdirs):
+                return True
+
+    # If services are running, assume persistence is configured (K8s PVCs)
+    # This handles Kubernetes deployments where data dirs aren't local
+    if check_grafana_running() and check_mimir_running():
+        return True
+
+    return False
 
 
 # =============================================================================

@@ -130,6 +130,49 @@ def extract_code(text: str, language: str = "python") -> str:
     return text
 
 
+def get_result_file_path(feature: Feature, output_dir: Optional[Path] = None) -> Path:
+    """Get the path to the result JSON file for a feature."""
+    base_dir = output_dir or OUTPUT_DIR
+    if feature.output_subdir:
+        base_dir = base_dir / feature.output_subdir
+    slug = feature.name.replace(" ", "_").lower()
+    return base_dir / f"{slug}_result.json"
+
+
+def load_existing_result(feature: Feature, output_dir: Optional[Path] = None) -> Optional[WorkflowResult]:
+    """
+    Load an existing successful result for a feature if it exists.
+    
+    Returns:
+        WorkflowResult if found and successful, None otherwise
+    """
+    result_file = get_result_file_path(feature, output_dir)
+    
+    if not result_file.exists():
+        return None
+    
+    try:
+        with open(result_file, "r") as f:
+            data = json.load(f)
+        
+        # Only return if it was successful
+        if data.get("success", False):
+            return WorkflowResult(
+                feature_name=data.get("feature", feature.name),
+                success=True,
+                implementation="",  # Don't load code, just metadata
+                summary=data.get("summary", {}),
+                error=data.get("error"),
+                total_cost=data.get("total_cost", 0),
+                iterations=data.get("iterations", 0),
+            )
+    except (json.JSONDecodeError, KeyError, IOError):
+        # If file is corrupted or missing fields, treat as not found
+        return None
+    
+    return None
+
+
 def save_result(result: WorkflowResult, feature: Feature, output_dir: Optional[Path] = None):
     """Save workflow result to files."""
     base_dir = output_dir or OUTPUT_DIR
@@ -169,6 +212,8 @@ def run_features(
     output_dir: Optional[Path] = None,
     verbose: bool = True,
     stop_on_error: bool = False,
+    skip_existing: bool = True,
+    force: bool = False,
 ) -> List[WorkflowResult]:
     """
     Run Lead Contractor workflow for multiple features.
@@ -178,15 +223,29 @@ def run_features(
         output_dir: Output directory for generated code
         verbose: Whether to print progress
         stop_on_error: Whether to stop on first error
+        skip_existing: Skip features that already have successful results
+        force: Force regeneration even if successful result exists (overrides skip_existing)
 
     Returns:
         List of WorkflowResults
     """
     results = []
+    skipped_count = 0
 
     for i, feature in enumerate(features, 1):
         if verbose:
             print(f"\n[{i}/{len(features)}] Processing {feature.name}")
+
+        # Check for existing successful result
+        if skip_existing and not force:
+            existing = load_existing_result(feature, output_dir)
+            if existing:
+                if verbose:
+                    print(f"  ✓ Skipping (already completed successfully)")
+                    print(f"    Previous cost: ${existing.total_cost:.4f}, Iterations: {existing.iterations}")
+                results.append(existing)
+                skipped_count += 1
+                continue
 
         try:
             result = run_workflow(feature, verbose)
@@ -215,9 +274,13 @@ def run_features(
         print(f"\n{'='*60}")
         print("SUMMARY")
         print(f"{'='*60}")
-        print(f"Total features: {len(results)}")
-        print(f"Successful: {sum(1 for r in results if r.success)}")
-        print(f"Failed: {sum(1 for r in results if not r.success)}")
-        print(f"Total cost: ${sum(r.total_cost for r in results):.4f}")
+        print(f"Total features: {len(features)}")
+        print(f"  Skipped (already completed): {skipped_count}")
+        print(f"  Run: {len(results) - skipped_count}")
+        print(f"  Successful: {sum(1 for r in results if r.success)}")
+        print(f"  Failed: {sum(1 for r in results if not r.success)}")
+        # Only count cost for newly run features (not skipped ones)
+        new_cost = sum(r.total_cost for r in results if r.iterations > 0)
+        print(f"  Cost (this run): ${new_cost:.4f}")
 
     return results

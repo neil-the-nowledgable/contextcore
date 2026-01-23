@@ -1,0 +1,38 @@
+{
+  "total_tasks": 5,
+  "successful": 5,
+  "failed": 0,
+  "total_cost": 0.7140333000000001,
+  "results": [
+    {
+      "task_id": "task-4",
+      "success": true,
+      "cost": 0.18783704999999998,
+      "output_file": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/task-4-align-agent-attributes-with-genai-conventions.json"
+    },
+    {
+      "task_id": "task-5",
+      "success": true,
+      "cost": 0.14657415000000001,
+      "output_file": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/task-5-resource-attribute-restructuring.json"
+    },
+    {
+      "task_id": "task-6",
+      "success": true,
+      "cost": 0.16394504999999998,
+      "output_file": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/task-6-event-standardization.json"
+    },
+    {
+      "task_id": "task-7",
+      "success": true,
+      "cost": 0.0869886,
+      "output_file": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/task-7-crd-field-conversion.json"
+    },
+    {
+      "task_id": "task-8",
+      "success": true,
+      "cost": 0.12868845,
+      "output_file": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/task-8-create-semantic-convention-registry-files.json"
+    }
+  ]
+}

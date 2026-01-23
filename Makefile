@@ -13,13 +13,20 @@
 
 .PHONY: help doctor up down destroy status health smoke-test verify backup restore \
         storage-status storage-clean logs-tempo logs-mimir logs-loki logs-grafana \
-        test lint typecheck build install clean dashboards-provision dashboards-list
+        test lint typecheck build install clean dashboards-provision dashboards-list \
+        seed-metrics full-setup wait-ready install-verify
 
 # Configuration
 COMPOSE_FILE := docker-compose.yaml
 REQUIRED_PORTS := 3000 3100 3200 9009 4317 4318
 BACKUP_DIR := backups/$(shell date +%Y%m%d-%H%M%S)
 DATA_DIR := data
+
+# Environment configuration (can be overridden)
+GRAFANA_URL ?= http://localhost:3000
+GRAFANA_USER ?= admin
+GRAFANA_PASSWORD ?= admin
+OTLP_ENDPOINT ?= localhost:4317
 
 # Colors for output
 GREEN := \033[0;32m
@@ -123,24 +130,27 @@ health: ## Show one-line health status per component
 	@printf "Tempo:       "; curl -sf http://localhost:3200/ready >/dev/null 2>&1 && echo "$(GREEN)✅ Ready$(NC)" || echo "$(RED)❌ Not Ready$(NC)"
 	@printf "Mimir:       "; curl -sf http://localhost:9009/ready >/dev/null 2>&1 && echo "$(GREEN)✅ Ready$(NC)" || echo "$(RED)❌ Not Ready$(NC)"
 	@printf "Loki:        "; curl -sf http://localhost:3100/ready >/dev/null 2>&1 && echo "$(GREEN)✅ Ready$(NC)" || echo "$(RED)❌ Not Ready$(NC)"
-	@printf "OTLP (gRPC): "; nc -z localhost 4317 2>/dev/null && echo "$(GREEN)✅ Listening$(NC)" || echo "$(RED)❌ Not Listening$(NC)"
-	@printf "OTLP (HTTP): "; nc -z localhost 4318 2>/dev/null && echo "$(GREEN)✅ Listening$(NC)" || echo "$(RED)❌ Not Listening$(NC)"
+	@printf "Alloy:       "; curl -sf http://localhost:12345/ready >/dev/null 2>&1 && echo "$(GREEN)✅ Ready$(NC)" || echo "$(RED)❌ Not Ready$(NC)"
+	@printf "OTLP (gRPC): "; nc -z localhost 4317 2>/dev/null && echo "$(GREEN)✅ Listening (Alloy)$(NC)" || echo "$(RED)❌ Not Listening$(NC)"
+	@printf "OTLP (HTTP): "; nc -z localhost 4318 2>/dev/null && echo "$(GREEN)✅ Listening (Alloy)$(NC)" || echo "$(RED)❌ Not Listening$(NC)"
 
 smoke-test: ## Validate entire stack is working after deployment
 	@echo "$(CYAN)=== Smoke Test ===$(NC)"
 	@echo ""
-	@PASSED=0; TOTAL=6; \
+	@PASSED=0; TOTAL=7; \
 	echo "1. Checking Grafana..."; \
-	curl -sf http://localhost:3000/api/health >/dev/null 2>&1 && { echo "$(GREEN)   ✅ Grafana responding$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ Grafana not accessible$(NC)"; \
+	curl -sf $(GRAFANA_URL)/api/health >/dev/null 2>&1 && { echo "$(GREEN)   ✅ Grafana responding$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ Grafana not accessible$(NC)"; \
 	echo "2. Checking Tempo..."; \
 	curl -sf http://localhost:3200/ready >/dev/null 2>&1 && { echo "$(GREEN)   ✅ Tempo responding$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ Tempo not accessible$(NC)"; \
 	echo "3. Checking Mimir..."; \
 	curl -sf http://localhost:9009/ready >/dev/null 2>&1 && { echo "$(GREEN)   ✅ Mimir responding$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ Mimir not accessible$(NC)"; \
 	echo "4. Checking Loki..."; \
 	curl -sf http://localhost:3100/ready >/dev/null 2>&1 && { echo "$(GREEN)   ✅ Loki responding$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ Loki not accessible$(NC)"; \
-	echo "5. Checking Grafana datasources..."; \
-	curl -sf http://localhost:3000/api/datasources -u admin:admin 2>/dev/null | grep -q "tempo\|mimir\|loki" && { echo "$(GREEN)   ✅ Datasources configured$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(YELLOW)   ⚠️  Datasources may need provisioning$(NC)"; \
-	echo "6. Checking ContextCore CLI..."; \
+	echo "5. Checking Alloy (OTLP collector)..."; \
+	curl -sf http://localhost:12345/ready >/dev/null 2>&1 && { echo "$(GREEN)   ✅ Alloy responding (OTLP on 4317/4318)$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ Alloy not accessible$(NC)"; \
+	echo "6. Checking Grafana datasources..."; \
+	curl -sf $(GRAFANA_URL)/api/datasources -u $(GRAFANA_USER):$(GRAFANA_PASSWORD) 2>/dev/null | grep -q "tempo\|mimir\|loki" && { echo "$(GREEN)   ✅ Datasources configured$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(YELLOW)   ⚠️  Datasources may need provisioning$(NC)"; \
+	echo "7. Checking ContextCore CLI..."; \
 	PYTHONPATH=./src python3 -c "from contextcore import TaskTracker; print('ok')" >/dev/null 2>&1 && { echo "$(GREEN)   ✅ ContextCore CLI available$(NC)"; PASSED=$$((PASSED+1)); } || echo "$(RED)   ❌ ContextCore CLI not installed$(NC)"; \
 	echo ""; \
 	echo "$(CYAN)=== Smoke Test Complete: $$PASSED/$$TOTAL passed ===$(NC)"
@@ -166,6 +176,60 @@ verify: ## Quick cluster health check
 		echo "$(YELLOW)  ⚠️  No observability containers running$(NC)"; \
 	fi
 
+wait-ready: ## Wait for all services to be ready (timeout 60s)
+	@echo "$(CYAN)=== Waiting for Services ===$(NC)"
+	@echo ""
+	@for i in $$(seq 1 30); do \
+		ALL_READY=true; \
+		curl -sf $(GRAFANA_URL)/api/health >/dev/null 2>&1 || ALL_READY=false; \
+		curl -sf http://localhost:3200/ready >/dev/null 2>&1 || ALL_READY=false; \
+		curl -sf http://localhost:9009/ready >/dev/null 2>&1 || ALL_READY=false; \
+		curl -sf http://localhost:3100/ready >/dev/null 2>&1 || ALL_READY=false; \
+		curl -sf http://localhost:12345/ready >/dev/null 2>&1 || ALL_READY=false; \
+		if [ "$$ALL_READY" = "true" ]; then \
+			echo "$(GREEN)All services ready!$(NC)"; \
+			exit 0; \
+		fi; \
+		echo "  Waiting... ($$i/30)"; \
+		sleep 2; \
+	done; \
+	echo "$(RED)Timeout waiting for services$(NC)"; \
+	exit 1
+
+seed-metrics: ## Run installation verification to populate dashboard metrics
+	@echo "$(CYAN)=== Seeding Installation Metrics ===$(NC)"
+	@echo ""
+	@echo "Running installation verification with telemetry export..."
+	@GRAFANA_URL=$(GRAFANA_URL) GRAFANA_USER=$(GRAFANA_USER) GRAFANA_PASSWORD=$(GRAFANA_PASSWORD) \
+		PYTHONPATH=./src python3 -m contextcore.cli install verify --endpoint $(OTLP_ENDPOINT)
+	@echo ""
+	@echo "$(GREEN)Metrics exported to Mimir via $(OTLP_ENDPOINT)$(NC)"
+	@echo "Dashboard data should now be available at: $(GRAFANA_URL)/d/contextcore-installation"
+
+install-verify: install seed-metrics ## Install ContextCore and populate dashboard metrics
+	@echo ""
+	@echo "$(GREEN)=== Installation Complete ===$(NC)"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. View Installation dashboard: $(GRAFANA_URL)/d/contextcore-installation"
+	@echo "  2. Run 'make smoke-test' to validate stack"
+	@echo "  3. Start tracking tasks with: contextcore task start --id TASK-1 --title 'My Task'"
+
+full-setup: up wait-ready seed-metrics ## Complete setup: start stack, wait for ready, seed metrics
+	@echo ""
+	@echo "$(GREEN)=== Full Setup Complete ===$(NC)"
+	@echo ""
+	@echo "ContextCore observability stack is ready!"
+	@echo ""
+	@echo "Dashboards available at: $(GRAFANA_URL)"
+	@echo "  - Installation Status: $(GRAFANA_URL)/d/contextcore-installation"
+	@echo "  - Project Portfolio:   $(GRAFANA_URL)/d/contextcore-portfolio"
+	@echo ""
+	@echo "Quick commands:"
+	@echo "  make health       - Check component health"
+	@echo "  make smoke-test   - Validate entire stack"
+	@echo "  make seed-metrics - Re-export installation metrics"
+
 # === Backup & Restore ===
 
 backup: ## Export state to timestamped backup directory
@@ -176,13 +240,13 @@ backup: ## Export state to timestamped backup directory
 	@echo "Backup directory: $(BACKUP_DIR)"
 	@echo ""
 	@echo "Exporting Grafana dashboards..."
-	@curl -sf "http://localhost:3000/api/search?type=dash-db" -u admin:admin 2>/dev/null | \
+	@curl -sf "$(GRAFANA_URL)/api/search?type=dash-db" -u $(GRAFANA_USER):$(GRAFANA_PASSWORD) 2>/dev/null | \
 		python3 -c "import sys,json; [print(d['uid']) for d in json.load(sys.stdin)]" 2>/dev/null | \
 		while read uid; do \
-			curl -sf "http://localhost:3000/api/dashboards/uid/$$uid" -u admin:admin > "$(BACKUP_DIR)/dashboards/$$uid.json" 2>/dev/null; \
+			curl -sf "$(GRAFANA_URL)/api/dashboards/uid/$$uid" -u $(GRAFANA_USER):$(GRAFANA_PASSWORD) > "$(BACKUP_DIR)/dashboards/$$uid.json" 2>/dev/null; \
 		done || echo "$(YELLOW)  Note: Grafana not accessible, skipping dashboard export$(NC)"
 	@echo "Exporting Grafana datasources..."
-	@curl -sf "http://localhost:3000/api/datasources" -u admin:admin > "$(BACKUP_DIR)/datasources/datasources.json" 2>/dev/null || echo "$(YELLOW)  Note: Could not export datasources$(NC)"
+	@curl -sf "$(GRAFANA_URL)/api/datasources" -u $(GRAFANA_USER):$(GRAFANA_PASSWORD) > "$(BACKUP_DIR)/datasources/datasources.json" 2>/dev/null || echo "$(YELLOW)  Note: Could not export datasources$(NC)"
 	@echo "Creating manifest..."
 	@echo '{"created_at": "'$$(date -u +%Y-%m-%dT%H:%M:%SZ)'", "version": "1.0"}' > $(BACKUP_DIR)/manifest.json
 	@echo ""
@@ -208,7 +272,7 @@ restore: ## Restore from backup directory (usage: make restore BACKUP=backups/YY
 		if [ -f "$$f" ]; then \
 			echo "  Importing: $$f"; \
 			cat "$$f" | python3 -c "import sys,json; d=json.load(sys.stdin); print(json.dumps({'dashboard':d.get('dashboard',d),'overwrite':True}))" | \
-				curl -sf -X POST "http://localhost:3000/api/dashboards/db" -u admin:admin -H "Content-Type: application/json" -d @- >/dev/null 2>&1; \
+				curl -sf -X POST "$(GRAFANA_URL)/api/dashboards/db" -u $(GRAFANA_USER):$(GRAFANA_PASSWORD) -H "Content-Type: application/json" -d @- >/dev/null 2>&1; \
 		fi; \
 	done || echo "$(YELLOW)  Note: Could not import dashboards$(NC)"
 	@echo ""
@@ -294,6 +358,9 @@ dashboards-list: ## List provisioned dashboards in Grafana
 help: ## Show this help
 	@echo "$(CYAN)ContextCore Makefile$(NC)"
 	@echo ""
+	@echo "$(YELLOW)Quick Start:$(NC)"
+	@grep -E '^full-setup:' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
+	@echo ""
 	@echo "$(YELLOW)Preflight:$(NC)"
 	@grep -E '^doctor:' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
 	@echo ""
@@ -301,7 +368,7 @@ help: ## Show this help
 	@grep -E '^(up|down|destroy|status):' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
 	@echo ""
 	@echo "$(YELLOW)Health & Validation:$(NC)"
-	@grep -E '^(health|smoke-test|verify):' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
+	@grep -E '^(health|smoke-test|verify|wait-ready|seed-metrics):' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
 	@echo ""
 	@echo "$(YELLOW)Backup & Restore:$(NC)"
 	@grep -E '^(backup|restore):' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
@@ -313,9 +380,15 @@ help: ## Show this help
 	@grep -E '^logs-' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
 	@echo ""
 	@echo "$(YELLOW)Development:$(NC)"
-	@grep -E '^(install|test|lint|typecheck|build|clean):' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
+	@grep -E '^(install|install-verify|test|lint|typecheck|build|clean):' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
 	@echo ""
 	@echo "$(YELLOW)Dashboards:$(NC)"
 	@grep -E '^dashboards-' $(MAKEFILE_LIST) | sed 's/:.*##/  →/' | sed 's/^/  make /'
+	@echo ""
+	@echo "$(YELLOW)Environment Variables:$(NC)"
+	@echo "  GRAFANA_URL       Grafana URL (default: http://localhost:3000)"
+	@echo "  GRAFANA_USER      Grafana user (default: admin)"
+	@echo "  GRAFANA_PASSWORD  Grafana password (default: admin)"
+	@echo "  OTLP_ENDPOINT     OTLP endpoint (default: localhost:4317)"
 
 .DEFAULT_GOAL := help

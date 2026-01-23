@@ -45,6 +45,7 @@ from opentelemetry.trace import Link, SpanKind, Status, StatusCode
 from contextcore.contracts.types import TaskStatus, TaskType, Priority
 from contextcore.logger import TaskLogger
 from contextcore.state import StateManager, SpanState, format_trace_id, format_span_id
+from contextcore.compat.otel_genai import mapper
 
 logger = logging.getLogger(__name__)
 
@@ -358,8 +359,14 @@ class TaskTracker:
         attributes[TASK_PERCENT_COMPLETE] = 0.0
         attributes[TASK_SUBTASK_COUNT] = 0
         attributes[TASK_SUBTASK_COMPLETED] = 0
-
+        
         attributes.update(extra_attributes)
+        
+        # Add OTel GenAI operation name
+        attributes["gen_ai.operation.name"] = "task"
+
+        # Apply dual-emit mapping
+        attributes = mapper.map_attributes(attributes)
 
         # Build links for dependencies
         links: List[Link] = []
