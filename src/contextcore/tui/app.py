@@ -91,7 +91,7 @@ class ContextCoreTUI(App[None]):
         """
         super().__init__()
         self.initial_screen = initial_screen
-        self.auto_refresh = auto_refresh
+        self._enable_auto_refresh = auto_refresh  # Renamed to avoid Textual property conflict
         self.install_method = install_method
         self._screen_history = []
 
