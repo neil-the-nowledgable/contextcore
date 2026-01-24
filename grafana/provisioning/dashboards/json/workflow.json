@@ -233,14 +233,18 @@
     "list": [
       {
         "current": {
-          "text": "ajidamoo-squirrel",
-          "value": "ajidamoo-squirrel"
+          "text": "beaver-lead-contractor",
+          "value": "beaver-lead-contractor"
         },
         "label": "Project",
         "name": "project",
         "options": [
           {
             "selected": true,
+            "text": "beaver-lead-contractor",
+            "value": "beaver-lead-contractor"
+          },
+          {
             "text": "ajidamoo-squirrel",
             "value": "ajidamoo-squirrel"
           },
@@ -261,7 +265,7 @@
             "value": "contextcore"
           }
         ],
-        "query": "ajidamoo-squirrel,asabikeshiinh-localization,contextcore-tui-fixes,demo-project,contextcore",
+        "query": "beaver-lead-contractor,ajidamoo-squirrel,asabikeshiinh-localization,contextcore-tui-fixes,demo-project,contextcore",
         "type": "custom"
       }
     ]
