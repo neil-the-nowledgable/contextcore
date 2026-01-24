@@ -1,6 +1,4 @@
 # File: src/contextcore/learning/loop.py
-__all__ = ['LearningLoop']
-
 
 from typing import List, Optional, Callable
 from contextcore.learning.emitter import LessonEmitter
