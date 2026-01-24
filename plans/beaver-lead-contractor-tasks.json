@@ -1,0 +1,108 @@
+{
+  "project": {
+    "id": "beaver-lead-contractor",
+    "name": "Beaver Lead Contractor Integration",
+    "description": "Integrate startd8 SDK Lead Contractor workflow with ContextCore task tracking"
+  },
+  "tasks": [
+    {
+      "id": "BLC-001",
+      "title": "Add workflow run endpoint to Rabbit API",
+      "type": "task",
+      "status": "pending",
+      "description": "Implement POST /api/run endpoint in ContextCore Rabbit API to trigger the Lead Contractor workflow. Should accept task_description, task_id, project_id, and drafter_agent parameters.",
+      "parent_id": null,
+      "tags": ["api", "rabbit", "phase-1"]
+    },
+    {
+      "id": "BLC-002",
+      "title": "Implement workflow status endpoint",
+      "type": "task",
+      "status": "pending",
+      "description": "Implement GET /api/workflows/{id}/status endpoint for real-time workflow progress updates. Return current phase, progress percentage, and any errors.",
+      "parent_id": null,
+      "tags": ["api", "rabbit", "phase-1"]
+    },
+    {
+      "id": "BLC-003",
+      "title": "Add workflow history endpoint",
+      "type": "task",
+      "status": "pending",
+      "description": "Implement GET /api/workflows endpoint to list completed workflow runs with duration, cost, and outcome. Support filtering by project_id and date range.",
+      "parent_id": null,
+      "tags": ["api", "rabbit", "phase-1"]
+    },
+    {
+      "id": "BLC-004",
+      "title": "Update Workflow Manager trigger panel",
+      "type": "task",
+      "status": "pending",
+      "description": "Configure the Trigger Workflow button panel in workflow.json to call POST /api/run with the selected task parameters.",
+      "parent_id": null,
+      "tags": ["dashboard", "grafana", "phase-2"]
+    },
+    {
+      "id": "BLC-005",
+      "title": "Add workflow status panel",
+      "type": "task",
+      "status": "pending",
+      "description": "Add a panel to show active workflow progress including current phase (spec/draft/review/integration), iteration count, and elapsed time.",
+      "parent_id": null,
+      "tags": ["dashboard", "grafana", "phase-2"]
+    },
+    {
+      "id": "BLC-006",
+      "title": "Add workflow history panel",
+      "type": "task",
+      "status": "pending",
+      "description": "Add a panel to display completed workflow runs with task title, duration, total cost, agent breakdown, and success/failure status.",
+      "parent_id": null,
+      "tags": ["dashboard", "grafana", "phase-2"]
+    },
+    {
+      "id": "BLC-007",
+      "title": "Test ContextCore task tracking integration",
+      "type": "task",
+      "status": "pending",
+      "description": "Verify that running LeadContractorContextCoreWorkflow creates task spans in Tempo with correct status transitions and events.",
+      "parent_id": null,
+      "tags": ["testing", "integration", "phase-3"]
+    },
+    {
+      "id": "BLC-008",
+      "title": "Add insight emission for workflow decisions",
+      "type": "task",
+      "status": "pending",
+      "description": "Emit InsightEmitter decisions for spec creation approach and review verdicts. Include confidence scores and context.",
+      "parent_id": null,
+      "tags": ["insights", "tracking", "phase-3"]
+    },
+    {
+      "id": "BLC-009",
+      "title": "Add cost tracking metrics",
+      "type": "task",
+      "status": "pending",
+      "description": "Emit LLM cost as span attributes including total_cost, input_tokens, output_tokens per agent, and per-phase breakdown.",
+      "parent_id": null,
+      "tags": ["metrics", "cost", "phase-3"]
+    },
+    {
+      "id": "BLC-010",
+      "title": "Update CLAUDE.md with Beaver integration",
+      "type": "task",
+      "status": "pending",
+      "description": "Add documentation to CLAUDE.md explaining how to use the Lead Contractor workflow with ContextCore task tracking.",
+      "parent_id": null,
+      "tags": ["docs", "phase-4"]
+    },
+    {
+      "id": "BLC-011",
+      "title": "Create workflow usage guide",
+      "type": "task",
+      "status": "pending",
+      "description": "Create end-to-end guide in docs/ showing how to run Lead Contractor from Workflow Manager dashboard with examples.",
+      "parent_id": null,
+      "tags": ["docs", "phase-4"]
+    }
+  ]
+}
