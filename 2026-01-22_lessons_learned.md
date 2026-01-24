@@ -177,6 +177,96 @@ except ImportError:
 
 ---
 
+## 2026-01-24: Value Capabilities Dashboard & Telemetry
+
+### Tempo Instance Confusion
+
+**Problem:** Data emitted to Docker Tempo (localhost:4317) was not visible in Grafana querying K8s Tempo (tempo.observability.svc.cluster.local:3200).
+
+**Solution:**
+- Verify which Tempo instance Grafana is configured to query
+- Use port-forward to emit to K8s Tempo: `kubectl port-forward -n observability svc/tempo 4318:4317`
+- Emit with explicit endpoint: `contextcore value emit --endpoint localhost:4318`
+
+**Key Takeaway:** Always verify the data pipeline end-to-end - where data is emitted and where queries read from.
+
+---
+
+### Singular vs Plural Attribute Queries
+
+**Problem:** TraceQL query `{ value.persona = "developer" }` returns 0 results even though developer appears in capabilities' persona lists.
+
+**Solution:**
+- `value.persona` contains only the PRIMARY persona
+- `value.personas` contains comma-separated list of ALL personas
+- Use regex for "any match": `{ value.personas =~ ".*developer.*" }`
+
+**Pattern:**
+```traceql
+# Only primary persona match
+{ .value.persona = "designer" }
+
+# Any persona match (correct for filtering)
+{ .value.personas =~ ".*developer.*" }
+```
+
+**Key Takeaway:** When an attribute has both singular and plural forms, the singular is typically the primary/default while plural contains the full list.
+
+---
+
+### Grafana Stat Panel Bug with TraceQL
+
+**Problem:** Stat panels using TraceQL queries cause Grafana to hang with "Loading plugin panel..." and log nil pointer dereference errors.
+
+**Solution:** Use table panels with `footer.countRows: true` instead of stat panels with `reduceOptions.calcs: ["count"]`.
+
+**Error Pattern:**
+```
+level=error msg="Request error" error="runtime error: invalid memory address or nil pointer dereference"
+stack="github.com/grafana/grafana/pkg/tsdb/tempo/search.go:102..."
+```
+
+**Key Takeaway:** When Grafana plugins have bugs, work around them with alternative visualization types rather than waiting for fixes.
+
+---
+
+### TraceQL Attribute Dot Prefix
+
+**Problem:** TraceQL filter clause `value.type = "direct"` returns 0 results.
+
+**Solution:** Span attributes require dot prefix in TraceQL filter clauses: `.value.type = "direct"`
+
+**Pattern:**
+```traceql
+# Correct - dot prefix for span attribute
+{ name =~ "value_capability:.*" && .value.type = "direct" }
+
+# Wrong - missing dot prefix
+{ name =~ "value_capability:.*" && value.type = "direct" }
+```
+
+**Key Takeaway:** TraceQL distinguishes between intrinsic span fields (no dot) and span attributes (dot prefix).
+
+---
+
+### Pydantic Enum Values Already Converted
+
+**Problem:** `'str' object has no attribute 'value'` error when calling `.value` on enum fields.
+
+**Solution:** Pydantic models with `model_config = ConfigDict(use_enum_values=True)` already convert enums to strings. Check type before calling `.value`:
+
+**Pattern:**
+```python
+# Safe enum handling
+audience = capability.get_audience()
+audience_value = audience if isinstance(audience, str) else audience.value
+span.set_attribute("capability.audience", audience_value)
+```
+
+**Key Takeaway:** When using Pydantic's `use_enum_values=True`, expect strings not enum instances.
+
+---
+
 ## Template for Future Lessons
 
 Use this format when adding new lessons:

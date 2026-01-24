@@ -641,10 +641,12 @@ Value capabilities add the following span attributes:
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `value.type` | enum | Value classification: `direct`, `indirect`, `ripple` |
-| `value.persona` | enum | Primary target persona |
-| `value.personas` | string | Comma-separated list of all target personas |
-| `value.channel` | enum | Primary distribution channel |
-| `value.channels` | string | Comma-separated list of all channels |
+| `value.persona` | enum | Primary target persona (use for exact primary match) |
+| `value.personas` | string | Comma-separated list of all target personas (use regex for "any" match) |
+| `value.channel` | enum | Primary distribution channel (use for exact primary match) |
+| `value.channels` | string | Comma-separated list of all channels (use regex for "any" match) |
+
+> **Note**: Use `value.persona` for exact primary persona match. Use `value.personas =~ ".*developer.*"` to find all capabilities targeting developers (even if developer is not the primary persona).
 
 #### Value Messaging
 
@@ -741,32 +743,35 @@ The following value-focused categories were added to `knowledge.category`:
 ### TraceQL Query Examples (Value)
 
 ```traceql
-# Find capabilities for developers
-{ value.persona = "developer" }
+# Find capabilities where developer is the PRIMARY persona
+{ .value.persona = "developer" }
+
+# Find ALL capabilities targeting developers (recommended)
+{ .value.personas =~ ".*developer.*" }
 
 # Find direct value capabilities
-{ value.type = "direct" }
+{ .value.type = "direct" }
 
 # Find capabilities that reduce cognitive load
-{ value.cognitive_load_reduction != "" }
+{ .value.cognitive_load_reduction != "" }
 
 # Find capabilities with time savings
-{ value.time_savings != "" }
+{ .value.time_savings != "" }
 
 # Find capabilities related to dev-tour-guide
-{ value.related_skills =~ ".*dev-tour-guide.*" }
+{ .value.related_skills =~ ".*dev-tour-guide.*" }
 
 # Find capabilities mentioning "time" in pain point
-{ value.pain_point =~ ".*time.*" }
+{ .value.pain_point =~ ".*time.*" }
 
 # Cross-linked queries: find value for o11y skill
-{ value.related_skills =~ ".*o11y.*" && value.type = "direct" }
+{ .value.related_skills =~ ".*o11y.*" && .value.type = "direct" }
 
-# Find capabilities for Slack channel
-{ value.channels =~ ".*slack.*" }
+# Find ALL capabilities for Slack channel (any position in list)
+{ .value.channels =~ ".*slack.*" }
 
 # Find creator-focused capabilities (Audience of 1)
-{ value.creator_direct != "" || value.creator_ripple != "" }
+{ .value.creator_direct != "" || .value.creator_ripple != "" }
 ```
 
 ### CLI Commands
