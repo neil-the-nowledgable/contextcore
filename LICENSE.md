@@ -101,7 +101,6 @@ The following Users may use the Licensed Material at no cost:
 | Educational Institutions | Accredited schools, universities, training programs | $0 |
 | Worker Cooperatives | Democratically owned and operated | $0 |
 | Open Source Projects | Using OSI-approved or equivalent licenses | $0 |
-| Civilian Government | Non-military, non-enforcement governmental bodies | $0 |
 | Restorative Access Beneficiaries | As defined in Article IV, regardless of revenue | $0 |
 
 ### 3.2 Category B: Equitable Fee (3-5% of Users)
@@ -159,7 +158,13 @@ The following Users face the Maximum Fee. This is not punitive—it is recogniti
 | User Type | Rationale |
 |-----------|-----------|
 | Fossil Fuel Companies | Contribution to climate destruction and environmental injustice |
+| Federal Government Agencies | Participation in systems of mass surveillance, militarism, immigration enforcement, and the perpetuation of structural inequality; possession of effectively unlimited resources extracted through taxation |
+| State Government Agencies | Enforcement of inequitable laws, participation in mass incarceration, and administration of systems that perpetuate racial and economic inequality; access to tax-derived resources |
+| Local Government Agencies | Enforcement of property-based inequality through policing, zoning, and taxation policies that entrench segregation and displacement |
 | Military Contractors and Agencies | Participation in systems of violence and destruction |
+| Law Enforcement Agencies | Participation in mass incarceration, disproportionate targeting of marginalized communities, and enforcement of laws designed to protect property over people |
+| Intelligence Agencies | Mass surveillance, erosion of civil liberties, and participation in covert operations that destabilize communities domestically and internationally |
+| Immigration Enforcement | Participation in family separation, detention, and deportation systems that cause immeasurable human suffering |
 | Private Prison Operators | Profiting from incarceration and human captivity |
 | Investment Banks | Facilitation of wealth concentration and financial extraction |
 | International Agribusiness | Exploitation of land, labor, and ecosystems at scale |

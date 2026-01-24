@@ -18,4 +18,9 @@ Usage:
     python3 scripts/lead_contractor/cli.py learning
     python3 scripts/lead_contractor/cli.py vscode
     python3 scripts/lead_contractor/cli.py all
+
+    # Beaver workflow: Integrate backlog and complete full cycle
+    python3 scripts/lead_contractor/run_integrate_backlog_workflow.py
+    python3 scripts/lead_contractor/run_integrate_backlog_workflow.py --feature graph_schema
+    python3 scripts/lead_contractor/run_integrate_backlog_workflow.py --dry-run
 """

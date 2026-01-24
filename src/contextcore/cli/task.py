@@ -219,12 +219,30 @@ def task_comment(task_id: str, project: str, author: str, text: str):
 
 @task.command("list")
 @click.option("--project", "-p", envvar="CONTEXTCORE_PROJECT", default="default", help="Project ID")
-def task_list(project: str):
+@click.option("--from-state", is_flag=True, help="List tasks from local state store")
+def task_list(project: str, from_state: bool):
     """List active (incomplete) tasks.
 
     Example:
         contextcore task list --project my-project
     """
+    if from_state:
+        from contextcore.state import StateManager
+
+        state = StateManager(project)
+        active_spans = state.get_active_spans()
+        if not active_spans:
+            click.echo("No active tasks (state)")
+            return
+
+        click.echo(f"Active tasks in {project} (state):")
+        for task_id in sorted(active_spans.keys()):
+            span_state = active_spans[task_id]
+            status = span_state.attributes.get("task.status", "unknown")
+            title = span_state.attributes.get("task.title", "")
+            click.echo(f"  - {task_id} [{status}] {title}")
+        return
+
     tracker = _get_tracker(project)
     active = tracker.get_active_tasks()
 

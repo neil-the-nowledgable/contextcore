@@ -4,8 +4,6 @@ import urllib.request
 import urllib.parse
 from typing import List, Optional, Tuple
 from datetime import datetime, timedelta
-__all__ = ['LessonRetriever']
-
 
 from contextcore.learning.models import Lesson, LessonQuery, LessonCategory
 

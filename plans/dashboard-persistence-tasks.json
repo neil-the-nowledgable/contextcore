@@ -1,0 +1,676 @@
+{
+  "project": {
+    "id": "dashboard-persistence",
+    "name": "Dashboard & Persistence Architecture",
+    "description": "Dashboard organization with auto-discovery and data loss prevention system"
+  },
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Dashboard Folder Structure",
+      "plan_file": "plans/dashboard-persistence-phase-1-3.md"
+    },
+    {
+      "id": "phase-2",
+      "name": "Grafana Multi-Provider Config",
+      "plan_file": "plans/dashboard-persistence-phase-1-3.md"
+    },
+    {
+      "id": "phase-3",
+      "name": "Discovery Module",
+      "plan_file": "plans/dashboard-persistence-phase-1-3.md"
+    },
+    {
+      "id": "phase-4",
+      "name": "Provisioner Update",
+      "plan_file": "plans/dashboard-persistence-phase-4-6.md"
+    },
+    {
+      "id": "phase-5",
+      "name": "CLI Enhancements",
+      "plan_file": "plans/dashboard-persistence-phase-4-6.md"
+    },
+    {
+      "id": "phase-6",
+      "name": "Persistence Detector",
+      "plan_file": "plans/dashboard-persistence-phase-4-6.md"
+    },
+    {
+      "id": "phase-7",
+      "name": "Pre-Destroy Warning System",
+      "plan_file": "plans/dashboard-persistence-phase-7-9.md"
+    },
+    {
+      "id": "phase-8",
+      "name": "Telemetry Exporter",
+      "plan_file": "plans/dashboard-persistence-phase-7-9.md"
+    },
+    {
+      "id": "phase-9",
+      "name": "Audit Trail",
+      "plan_file": "plans/dashboard-persistence-phase-7-9.md"
+    }
+  ],
+  "spans": [
+    {
+      "span_id": "0001000000000001",
+      "parent_span_id": null,
+      "attributes": {
+        "task.id": "DP-EPIC",
+        "task.title": "Dashboard & Persistence Architecture",
+        "task.type": "epic",
+        "task.status": "backlog",
+        "task.description": "Organize dashboards by extension with auto-discovery and proactive data loss prevention"
+      }
+    },
+    {
+      "span_id": "0001000000000010",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH1",
+        "task.title": "Phase 1: Dashboard Folder Structure",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Reorganize dashboards from flat json/ folder into extension-specific folders",
+        "task.story_points": 3
+      }
+    },
+    {
+      "span_id": "0001000000000011",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-001",
+        "task.title": "Create core dashboard folder",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Create grafana/provisioning/dashboards/core/ directory"
+      }
+    },
+    {
+      "span_id": "0001000000000012",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-002",
+        "task.title": "Create extension folders",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Create folders for squirrel, rabbit, beaver, fox, coyote, external",
+        "task.blocked_by": ["DP-001"]
+      }
+    },
+    {
+      "span_id": "0001000000000013",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-003",
+        "task.title": "Move core dashboards",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Move portfolio, installation, project-progress, project-operations, sprint-metrics to core/",
+        "task.blocked_by": ["DP-001"]
+      }
+    },
+    {
+      "span_id": "0001000000000014",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-004",
+        "task.title": "Move squirrel dashboards",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Move skills-browser, value-capabilities to squirrel/",
+        "task.blocked_by": ["DP-002"]
+      }
+    },
+    {
+      "span_id": "0001000000000015",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-005",
+        "task.title": "Move rabbit dashboards",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Move workflow.json to rabbit/",
+        "task.blocked_by": ["DP-002"]
+      }
+    },
+    {
+      "span_id": "0001000000000016",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-006",
+        "task.title": "Move external dashboards",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Move agent-trigger.json to external/",
+        "task.blocked_by": ["DP-002"]
+      }
+    },
+    {
+      "span_id": "0001000000000017",
+      "parent_span_id": "0001000000000010",
+      "attributes": {
+        "task.id": "DP-007",
+        "task.title": "Update dashboard UIDs",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Rename UIDs to contextcore-{extension}-{name} format in JSON files",
+        "task.blocked_by": ["DP-003", "DP-004", "DP-005", "DP-006"]
+      }
+    },
+    {
+      "span_id": "0001000000000020",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH2",
+        "task.title": "Phase 2: Grafana Multi-Provider Config",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Update Grafana provisioning to auto-load from multiple extension folders",
+        "task.story_points": 2,
+        "task.blocked_by": ["DP-PH1"]
+      }
+    },
+    {
+      "span_id": "0001000000000021",
+      "parent_span_id": "0001000000000020",
+      "attributes": {
+        "task.id": "DP-008",
+        "task.title": "Backup existing dashboards.yaml",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Copy current config to dashboards.yaml.bak"
+      }
+    },
+    {
+      "span_id": "0001000000000022",
+      "parent_span_id": "0001000000000020",
+      "attributes": {
+        "task.id": "DP-009",
+        "task.title": "Create multi-provider config",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Write new dashboards.yaml with provider per extension",
+        "task.blocked_by": ["DP-008"]
+      }
+    },
+    {
+      "span_id": "0001000000000023",
+      "parent_span_id": "0001000000000020",
+      "attributes": {
+        "task.id": "DP-014",
+        "task.title": "Test Grafana reload",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Restart Grafana, verify all dashboards appear in correct folders",
+        "task.blocked_by": ["DP-009"]
+      }
+    },
+    {
+      "span_id": "0001000000000030",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH3",
+        "task.title": "Phase 3: Discovery Module",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Create Python module for auto-discovering dashboards from filesystem and entry points",
+        "task.story_points": 5,
+        "task.blocked_by": ["DP-PH1"]
+      }
+    },
+    {
+      "span_id": "0001000000000031",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-015",
+        "task.title": "Create discovery.py module",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "New file: src/contextcore/dashboards/discovery.py"
+      }
+    },
+    {
+      "span_id": "0001000000000032",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-016",
+        "task.title": "Implement EXTENSION_REGISTRY",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Define registry mapping extension IDs to folder names/UIDs",
+        "task.blocked_by": ["DP-015"]
+      }
+    },
+    {
+      "span_id": "0001000000000033",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-017",
+        "task.title": "Extend DashboardConfig",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Add extension and file_path fields to dataclass",
+        "task.blocked_by": ["DP-015"]
+      }
+    },
+    {
+      "span_id": "0001000000000034",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-018",
+        "task.title": "Implement discover_from_filesystem",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Function to scan folders and parse JSON metadata",
+        "task.blocked_by": ["DP-016", "DP-017"]
+      }
+    },
+    {
+      "span_id": "0001000000000035",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-019",
+        "task.title": "Implement discover_from_entry_points",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Function to load from Python entry points",
+        "task.blocked_by": ["DP-017"]
+      }
+    },
+    {
+      "span_id": "0001000000000036",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-020",
+        "task.title": "Implement discover_all_dashboards",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Combine both sources with deduplication",
+        "task.blocked_by": ["DP-018", "DP-019"]
+      }
+    },
+    {
+      "span_id": "0001000000000037",
+      "parent_span_id": "0001000000000030",
+      "attributes": {
+        "task.id": "DP-022",
+        "task.title": "Add discovery unit tests",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Test discovery with mock filesystem and entry points",
+        "task.blocked_by": ["DP-020"]
+      }
+    },
+    {
+      "span_id": "0001000000000040",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH4",
+        "task.title": "Phase 4: Provisioner Update",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Integrate the discovery module into the existing DashboardProvisioner",
+        "task.story_points": 3,
+        "task.blocked_by": ["DP-PH3"]
+      }
+    },
+    {
+      "span_id": "0001000000000041",
+      "parent_span_id": "0001000000000040",
+      "attributes": {
+        "task.id": "DP-023",
+        "task.title": "Import discovery module",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Add imports from discovery.py to provisioner.py"
+      }
+    },
+    {
+      "span_id": "0001000000000042",
+      "parent_span_id": "0001000000000040",
+      "attributes": {
+        "task.id": "DP-024",
+        "task.title": "Remove DEFAULT_DASHBOARDS",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Remove hardcoded list, use discovery instead",
+        "task.blocked_by": ["DP-023"]
+      }
+    },
+    {
+      "span_id": "0001000000000043",
+      "parent_span_id": "0001000000000040",
+      "attributes": {
+        "task.id": "DP-025",
+        "task.title": "Update provision_all method",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Add extension parameter, use discover_all_dashboards()",
+        "task.blocked_by": ["DP-024"]
+      }
+    },
+    {
+      "span_id": "0001000000000044",
+      "parent_span_id": "0001000000000040",
+      "attributes": {
+        "task.id": "DP-029",
+        "task.title": "Update provisioner tests",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Test with mocked discovery results",
+        "task.blocked_by": ["DP-025"]
+      }
+    },
+    {
+      "span_id": "0001000000000050",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH5",
+        "task.title": "Phase 5: CLI Enhancements",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Add extension filtering and new commands to dashboard CLI",
+        "task.story_points": 3,
+        "task.blocked_by": ["DP-PH4"]
+      }
+    },
+    {
+      "span_id": "0001000000000051",
+      "parent_span_id": "0001000000000050",
+      "attributes": {
+        "task.id": "DP-030",
+        "task.title": "Add --extension flag to provision",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Filter provisioning by extension"
+      }
+    },
+    {
+      "span_id": "0001000000000052",
+      "parent_span_id": "0001000000000050",
+      "attributes": {
+        "task.id": "DP-033",
+        "task.title": "Add --source flag to list",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Option to show local, grafana, or both"
+      }
+    },
+    {
+      "span_id": "0001000000000053",
+      "parent_span_id": "0001000000000050",
+      "attributes": {
+        "task.id": "DP-034",
+        "task.title": "Create extensions command",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "New command: contextcore dashboards extensions"
+      }
+    },
+    {
+      "span_id": "0001000000000060",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH6",
+        "task.title": "Phase 6: Persistence Detector",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Create module to detect what data needs persistence and derive importance",
+        "task.story_points": 5,
+        "task.blocked_by": ["DP-PH3"]
+      }
+    },
+    {
+      "span_id": "0001000000000061",
+      "parent_span_id": "0001000000000060",
+      "attributes": {
+        "task.id": "DP-037",
+        "task.title": "Create persistence module",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Create src/contextcore/persistence/__init__.py"
+      }
+    },
+    {
+      "span_id": "0001000000000062",
+      "parent_span_id": "0001000000000060",
+      "attributes": {
+        "task.id": "DP-038",
+        "task.title": "Create detector.py",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Main detection logic file",
+        "task.blocked_by": ["DP-037"]
+      }
+    },
+    {
+      "span_id": "0001000000000063",
+      "parent_span_id": "0001000000000060",
+      "attributes": {
+        "task.id": "DP-039",
+        "task.title": "Implement DataSource dataclass",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Model for a persistent data source",
+        "task.blocked_by": ["DP-038"]
+      }
+    },
+    {
+      "span_id": "0001000000000064",
+      "parent_span_id": "0001000000000060",
+      "attributes": {
+        "task.id": "DP-041",
+        "task.title": "Implement _scan_docker_compose",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Parse docker-compose.yaml for volumes",
+        "task.blocked_by": ["DP-039"]
+      }
+    },
+    {
+      "span_id": "0001000000000065",
+      "parent_span_id": "0001000000000060",
+      "attributes": {
+        "task.id": "DP-045",
+        "task.title": "Implement _derive_importance",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Use .contextcore.yaml business criticality",
+        "task.blocked_by": ["DP-041"]
+      }
+    },
+    {
+      "span_id": "0001000000000070",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH7",
+        "task.title": "Phase 7: Pre-Destroy Warning System",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Enhance make destroy with data inventory and export options",
+        "task.story_points": 3,
+        "task.blocked_by": ["DP-PH6"]
+      }
+    },
+    {
+      "span_id": "0001000000000071",
+      "parent_span_id": "0001000000000070",
+      "attributes": {
+        "task.id": "DP-048",
+        "task.title": "Create persistence CLI",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Create src/contextcore/cli/persistence.py"
+      }
+    },
+    {
+      "span_id": "0001000000000072",
+      "parent_span_id": "0001000000000070",
+      "attributes": {
+        "task.id": "DP-049",
+        "task.title": "Implement inventory command",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "contextcore persistence inventory shows data sources",
+        "task.blocked_by": ["DP-048"]
+      }
+    },
+    {
+      "span_id": "0001000000000073",
+      "parent_span_id": "0001000000000070",
+      "attributes": {
+        "task.id": "DP-050",
+        "task.title": "Add data-inventory Makefile target",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "New target that calls persistence inventory",
+        "task.blocked_by": ["DP-049"]
+      }
+    },
+    {
+      "span_id": "0001000000000074",
+      "parent_span_id": "0001000000000070",
+      "attributes": {
+        "task.id": "DP-052",
+        "task.title": "Update destroy target",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Add interactive menu: export all, export dashboards, or proceed",
+        "task.blocked_by": ["DP-050"]
+      }
+    },
+    {
+      "span_id": "0001000000000080",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH8",
+        "task.title": "Phase 8: Telemetry Exporter",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Export actual trace, metric, and log data",
+        "task.story_points": 5,
+        "task.blocked_by": ["DP-PH7"]
+      }
+    },
+    {
+      "span_id": "0001000000000081",
+      "parent_span_id": "0001000000000080",
+      "attributes": {
+        "task.id": "DP-056",
+        "task.title": "Create exporter.py",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "New file: src/contextcore/persistence/exporter.py"
+      }
+    },
+    {
+      "span_id": "0001000000000082",
+      "parent_span_id": "0001000000000080",
+      "attributes": {
+        "task.id": "DP-059",
+        "task.title": "Implement _export_traces",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Export from Tempo via /api/search + /api/traces",
+        "task.blocked_by": ["DP-056"]
+      }
+    },
+    {
+      "span_id": "0001000000000083",
+      "parent_span_id": "0001000000000080",
+      "attributes": {
+        "task.id": "DP-060",
+        "task.title": "Implement _export_metrics",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Export from Mimir via Prometheus query_range API",
+        "task.blocked_by": ["DP-056"]
+      }
+    },
+    {
+      "span_id": "0001000000000084",
+      "parent_span_id": "0001000000000080",
+      "attributes": {
+        "task.id": "DP-061",
+        "task.title": "Implement _export_logs",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Export from Loki via LogQL query_range API",
+        "task.blocked_by": ["DP-056"]
+      }
+    },
+    {
+      "span_id": "0001000000000085",
+      "parent_span_id": "0001000000000080",
+      "attributes": {
+        "task.id": "DP-063",
+        "task.title": "Add export CLI command",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "contextcore persistence export -t 24h -o ./backups/",
+        "task.blocked_by": ["DP-059", "DP-060", "DP-061"]
+      }
+    },
+    {
+      "span_id": "0001000000000090",
+      "parent_span_id": "0001000000000001",
+      "attributes": {
+        "task.id": "DP-PH9",
+        "task.title": "Phase 9: Audit Trail",
+        "task.type": "story",
+        "task.status": "backlog",
+        "task.description": "Record all destructive operations for accountability",
+        "task.story_points": 3,
+        "task.blocked_by": ["DP-PH7"]
+      }
+    },
+    {
+      "span_id": "0001000000000091",
+      "parent_span_id": "0001000000000090",
+      "attributes": {
+        "task.id": "DP-066",
+        "task.title": "Create audit.py",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "New file: src/contextcore/persistence/audit.py"
+      }
+    },
+    {
+      "span_id": "0001000000000092",
+      "parent_span_id": "0001000000000090",
+      "attributes": {
+        "task.id": "DP-067",
+        "task.title": "Implement AuditEvent dataclass",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Model for audit record",
+        "task.blocked_by": ["DP-066"]
+      }
+    },
+    {
+      "span_id": "0001000000000093",
+      "parent_span_id": "0001000000000090",
+      "attributes": {
+        "task.id": "DP-072",
+        "task.title": "Add audit CLI command",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "contextcore persistence audit shows history",
+        "task.blocked_by": ["DP-067"]
+      }
+    },
+    {
+      "span_id": "0001000000000094",
+      "parent_span_id": "0001000000000090",
+      "attributes": {
+        "task.id": "DP-073",
+        "task.title": "Integrate with destroy",
+        "task.type": "task",
+        "task.status": "backlog",
+        "task.description": "Record audit event on destroy operations",
+        "task.blocked_by": ["DP-072"]
+      }
+    }
+  ]
+}
