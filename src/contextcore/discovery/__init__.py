@@ -34,15 +34,15 @@ Usage:
     card_json = card.to_dict()
 """
 
-from .models import (
+from .agentcard import (
     AgentCard,
-    AgentCapabilities, 
+    AgentCapabilities,
     SkillDescriptor,
     AuthConfig,
     AuthScheme,
     ProviderInfo
 )
-from .endpoints import DiscoveryEndpoint, DiscoveryDocument
+from .endpoint import DiscoveryEndpoint, DiscoveryDocument
 from .client import DiscoveryClient
 
 __all__ = [

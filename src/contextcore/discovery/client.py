@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Tuple, List
 from urllib.parse import urljoin
 
-from contextcore.models import AgentCard
+from .agentcard import AgentCard
 
 
 logger = logging.getLogger(__name__)

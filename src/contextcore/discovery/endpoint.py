@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     import flask
     import fastapi
 
-from contextcore.agents.card import AgentCard
+from .agentcard import AgentCard
 
 __all__ = [
     'DiscoveryDocument',
@@ -188,27 +188,3 @@ def _handle_fastapi_response(data: Dict[str, Any], accept_header: str) -> Union[
     
     # Fallback to JSON
     return JSONResponse(content=data)
-
-
-# Basic usage
-from contextcore.agents.card import AgentCard
-from contextcore.discovery.endpoint import DiscoveryEndpoint
-
-agent = AgentCard(name="MyAgent", description="Test agent")
-endpoint = DiscoveryEndpoint(agent)
-
-# Get JSON data directly
-a2a_data = endpoint.get_a2a_agent_json()
-cc_data = endpoint.get_contextcore_json()
-
-# Flask integration
-from flask import Flask
-app = Flask(__name__)
-blueprint = create_discovery_blueprint(endpoint)
-app.register_blueprint(blueprint)
-
-# FastAPI integration
-from fastapi import FastAPI
-app = FastAPI()
-router = create_discovery_router(endpoint)
-app.include_router(router)
