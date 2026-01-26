@@ -31,7 +31,7 @@ class ExtensionType(str, Enum):
     BEAVER = "beaver"
     FOX = "fox"
     COYOTE = "coyote"
-    OWL = "owl"  # contextcore-grafana: Grafana plugins
+    OWL = "owl"  # contextcore-owl: Grafana plugins
     EXTERNAL = "external"
 
 

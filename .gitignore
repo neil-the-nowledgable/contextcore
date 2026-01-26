@@ -108,7 +108,7 @@ COMMIT_PLAN.md
 # Demo output (generated)
 demo_output/
 
-# Grafana plugin build artifacts (handled by contextcore-grafana/.gitignore)
-contextcore-grafana/node_modules/
-contextcore-grafana/plugins-new/*/node_modules/
-contextcore-grafana/plugins/*/node_modules/
+# Grafana plugin build artifacts (handled by contextcore-owl/.gitignore)
+contextcore-owl/node_modules/
+contextcore-owl/plugins-new/*/node_modules/
+contextcore-owl/plugins/*/node_modules/

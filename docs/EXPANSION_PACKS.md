@@ -195,7 +195,7 @@ print(f"Tokens: {client.session_tokens}")
 
 ---
 
-### contextcore-grafana (Gookooko'oo)
+### contextcore-owl (Gookooko'oo)
 
 **Unified Grafana Plugin Package**
 
@@ -204,7 +204,7 @@ print(f"Tokens: {client.session_tokens}")
 | **Animal** | Owl |
 | **Anishinaabe** | Gookooko'oo |
 | **Status** | Planned |
-| **Repository** | [contextcore-grafana](https://github.com/contextcore/contextcore-grafana) |
+| **Repository** | [contextcore-owl](https://github.com/contextcore/contextcore-owl) |
 | **License** | Equitable Use License v1.0 |
 | **Depends On** | contextcore-beaver (optional, for scaffold script) |
 
@@ -226,8 +226,8 @@ print(f"Tokens: {client.session_tokens}")
 **Installation**:
 ```bash
 # Clone and build
-git clone https://github.com/contextcore/contextcore-grafana
-cd contextcore-grafana
+git clone https://github.com/contextcore/contextcore-owl
+cd contextcore-owl
 npm install
 npm run build
 
@@ -235,14 +235,14 @@ npm run build
 cp -r dist/* /var/lib/grafana/plugins/
 
 # Or use Docker volume mount
-docker run -v ./contextcore-grafana/grafana/plugins:/var/lib/grafana/plugins grafana/grafana
+docker run -v ./contextcore-owl/grafana/plugins:/var/lib/grafana/plugins grafana/grafana
 ```
 
 **Docker Compose Integration**:
 ```yaml
 grafana:
   volumes:
-    - ./contextcore-grafana/grafana/plugins:/var/lib/grafana/plugins
+    - ./contextcore-owl/grafana/plugins:/var/lib/grafana/plugins
   environment:
     GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: contextcore-chat-panel,contextcore-workflow-panel,contextcore-datasource
 ```
