@@ -195,6 +195,60 @@ print(f"Tokens: {client.session_tokens}")
 
 ---
 
+### contextcore-grafana (Gookooko'oo)
+
+**Unified Grafana Plugin Package**
+
+| Field | Value |
+|-------|-------|
+| **Animal** | Owl |
+| **Anishinaabe** | Gookooko'oo |
+| **Status** | Planned |
+| **Repository** | [contextcore-grafana](https://github.com/contextcore/contextcore-grafana) |
+| **License** | Equitable Use License v1.0 |
+| **Depends On** | contextcore-beaver (optional, for scaffold script) |
+
+**Description**: Owl is the unified Grafana plugin package for ContextCore. It consolidates all Grafana extensions—workflow trigger panels, chat panels, and datasources—into a single package with consistent branding and shared infrastructure.
+
+**Key Features**:
+- **contextcore-chat-panel**: Chat with Claude via webhook (ported from O11yBubo)
+- **contextcore-workflow-panel**: Trigger Rabbit workflows from dashboards
+- **contextcore-datasource**: Datasource with Grafana route proxy for CORS-free API calls
+- **scaffold_plugin.py**: Generate new plugins using contextcore-beaver for LLM assistance
+
+**Plugins Included**:
+| Plugin ID | Type | Description |
+|-----------|------|-------------|
+| `contextcore-chat-panel` | Panel | Interactive chat panel for Claude via webhook |
+| `contextcore-workflow-panel` | Panel | Trigger and monitor Rabbit workflow executions |
+| `contextcore-datasource` | Datasource | Proxied access to Rabbit API endpoints |
+
+**Installation**:
+```bash
+# Clone and build
+git clone https://github.com/contextcore/contextcore-grafana
+cd contextcore-grafana
+npm install
+npm run build
+
+# Copy to Grafana plugins directory
+cp -r dist/* /var/lib/grafana/plugins/
+
+# Or use Docker volume mount
+docker run -v ./contextcore-grafana/grafana/plugins:/var/lib/grafana/plugins grafana/grafana
+```
+
+**Docker Compose Integration**:
+```yaml
+grafana:
+  volumes:
+    - ./contextcore-grafana/grafana/plugins:/var/lib/grafana/plugins
+  environment:
+    GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS: contextcore-chat-panel,contextcore-workflow-panel,contextcore-datasource
+```
+
+---
+
 ### contextcore-squirrel (Ajidamoo)
 
 **Skills Library for Token-Efficient Agent Discovery**
