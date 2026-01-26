@@ -18,14 +18,20 @@ status:
     - "OTel GenAI semantic convention alignment (dual-emit agent.* + gen_ai.*)"
     - "HistoricalTaskTracker now emits both spans AND logs for demo data"
     - "Exporter supports pushing logs to Loki via push API"
-    - "Portfolio dashboard updated with 6 dashboards provisioned"
+    - "Portfolio dashboard updated with 11 dashboards provisioned (6 core + 5 expansion)"
     - "Dashboard $project variables fixed to default to 'contextcore'"
     - "Identified task tracking vs deliverable validation gap"
+    - "Added Fox (Waagosh) alert automation dashboard"
+    - "Added Beaver (Amik) lead contractor progress dashboard"
+    - "Established Dependency Manifest Pattern for tracking external dependencies"
+    - "Added Infinity datasource for Rabbit API integration"
   nextSteps:
     - "Verify demo data appears in both Tempo and Loki"
     - "Create agent insights dashboard for gen_ai.* attributes"
     - "Implement Loki recording rules for task_percent_complete metrics"
     - "Add deliverable validation to task completion criteria"
+    - "Add CI validation for dependency manifests"
+    - "Create pre-commit hook for dependency scanning"
 
 business:
   criticality: critical
@@ -95,6 +101,26 @@ business:
         Discovered via phase tasks that marked 11 tasks as 'done' in Tempo but
         expected document sections were not created. Execution ≠ completion.
 
+    - risk: "Implicit dependencies cause deployment failures"
+      priority: P2
+      mitigation: |
+        Dependencies defined in design artifacts (dashboards, configs) must be
+        explicitly declared in manifests and validated at multiple checkpoints:
+        1. Dependency manifests at component level (grafana/provisioning/dashboards/dependencies.yaml)
+        2. Pre-commit validation for new dependency references
+        3. CI pipeline validation of manifest completeness
+        4. Runtime verification via contextcore install verify
+        See docs/DEPENDENCY_MANIFEST_PATTERN.md for full pattern.
+      scope:
+        - "grafana/provisioning/dashboards/dependencies.yaml"
+        - "docs/DEPENDENCY_MANIFEST_PATTERN.md"
+        - "scripts/validate_dependencies.py"
+      lesson: |
+        Discovered when loading Beaver dashboard that referenced yesoreyeram-infinity-datasource
+        plugin not configured in Grafana. Design-time dependencies must flow to deploy-time.
+      pattern: "docs/DEPENDENCY_MANIFEST_PATTERN.md"
+      antipattern: "Scattered implicit dependencies discovered only at deploy time"
+
 requirements:
   availability: "99.9%"
   latencyP99: "500ms"
@@ -112,6 +138,7 @@ design:
   otelGenaiGapAnalysis: "docs/OTEL_GENAI_GAP_ANALYSIS.md"
   expansionPacks: "docs/EXPANSION_PACKS.md"
   namingConvention: "docs/NAMING_CONVENTION.md"
+  dependencyManifest: "docs/DEPENDENCY_MANIFEST_PATTERN.md"
 
 # Expansion Pack Ecosystem
 # Animal names with Anishinaabe (Ojibwe) translations honoring Michigan's indigenous peoples
@@ -154,10 +181,20 @@ ecosystem:
       purpose: "Skills library for token-efficient agent discovery and knowledge storage"
       status: "beta"
       formerName: "contextcore-skills"
+    - name: "contextcore-grafana"
+      animal: "Owl"
+      anishinaabe: "Gookooko'oo"
+      meaning: "Owl (watchful, excellent vision)"
+      purpose: "Unified Grafana plugin package (workflow triggers, chat panels, datasources)"
+      status: "beta"
+      dependsOn: ["contextcore-beaver"]  # Optional, for scaffold script LLM generation
 
-# Dashboards (6 total, provisioned to Grafana)
+# Dashboards (11 total, provisioned to Grafana)
+# Dependencies declared in: grafana/provisioning/dashboards/dependencies.yaml
 dashboards:
+  dependencyManifest: "grafana/provisioning/dashboards/dependencies.yaml"
   provisioned:
+    # Core dashboards
     - id: "contextcore-portfolio"
       name: "Project Portfolio Overview"
       file: "grafana/provisioning/dashboards/json/portfolio.json"
@@ -182,6 +219,31 @@ dashboards:
       name: "Project Operations"
       file: "grafana/provisioning/dashboards/json/project-operations.json"
       datasources: ["Tempo"]
+    # Expansion pack dashboards
+    - id: "fox-alert-automation"
+      name: "Fox Alert Automation"
+      file: "grafana/provisioning/dashboards/json/fox-alert-automation.json"
+      datasources: ["Tempo", "Loki", "mimir"]
+      expansionPack: "contextcore-fox"
+    - id: "beaver-lead-contractor"
+      name: "Lead Contractor Progress"
+      file: "grafana/provisioning/dashboards/json/beaver-lead-contractor-progress.json"
+      datasources: ["Tempo", "mimir"]
+      expansionPack: "contextcore-beaver"
+    - id: "skills-browser"
+      name: "Skills Browser"
+      file: "grafana/provisioning/dashboards/json/skills-browser.json"
+      datasources: ["Tempo"]
+      expansionPack: "contextcore-squirrel"
+    - id: "workflow"
+      name: "Workflow Manager"
+      file: "grafana/provisioning/dashboards/json/workflow.json"
+      datasources: ["Tempo"]
+      expansionPack: "contextcore-rabbit"
+    - id: "agent-trigger"
+      name: "Agent Trigger"
+      file: "grafana/provisioning/dashboards/json/agent-trigger.json"
+      datasources: ["Loki"]
   needed:
     - "Agent Insights Dashboard (gen_ai.* attributes)"
     - "Agent Handoffs Dashboard (handoff.* + gen_ai.tool.*)"
@@ -230,3 +292,11 @@ designDecisions:
     rationale: |
       HistoricalTaskTracker now uses HistoricalTaskLogger to emit logs with
       historical timestamps alongside spans. Enables full dashboard testing.
+
+  - decision: "Explicit dependency manifests for external dependencies"
+    confidence: 0.90
+    rationale: |
+      Dependencies defined in design artifacts (Grafana plugins in dashboards, external
+      APIs in configs) must be explicitly declared in component-level manifests and
+      validated at design, build, and deploy time. Prevents "works on my machine" failures.
+      See docs/DEPENDENCY_MANIFEST_PATTERN.md for full specification.

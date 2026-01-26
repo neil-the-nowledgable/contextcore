@@ -1,0 +1,375 @@
+{
+  "uid": "contextcore-rabbit-contextcore-workflow-manager",
+  "title": "[RABBIT] ContextCore Workflow Manager",
+  "description": "View project tasks and workflow executions from Tempo traces",
+  "tags": [
+    "contextcore",
+    "rabbit",
+    "workflow"
+  ],
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "project",
+        "label": "Project",
+        "type": "custom",
+        "current": {
+          "text": "beaver-lead-contractor",
+          "value": "beaver-lead-contractor"
+        },
+        "options": [
+          {
+            "text": "beaver-lead-contractor",
+            "value": "beaver-lead-contractor",
+            "selected": true
+          },
+          {
+            "text": "dashboard-persistence",
+            "value": "dashboard-persistence"
+          },
+          {
+            "text": "ajidamoo-squirrel",
+            "value": "ajidamoo-squirrel"
+          },
+          {
+            "text": "asabikeshiinh-localization",
+            "value": "asabikeshiinh-localization"
+          },
+          {
+            "text": "contextcore-tui-fixes",
+            "value": "contextcore-tui-fixes"
+          },
+          {
+            "text": "demo-project",
+            "value": "demo-project"
+          },
+          {
+            "text": "contextcore",
+            "value": "contextcore"
+          }
+        ],
+        "query": "beaver-lead-contractor,dashboard-persistence,ajidamoo-squirrel,asabikeshiinh-localization,contextcore-tui-fixes,demo-project,contextcore"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Project Overview",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "collapsed": false
+    },
+    {
+      "id": 1,
+      "title": "Projects with Activity",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        }
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{resource.project.id != \"\"} | select(resource.project.id)",
+          "limit": 100,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Tasks - ${project}",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "task.status"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "pending": {
+                        "color": "yellow",
+                        "text": "PENDING"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "in_progress": {
+                        "color": "blue",
+                        "text": "IN PROGRESS"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "done": {
+                        "color": "green",
+                        "text": "DONE"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "blocked": {
+                        "color": "red",
+                        "text": "BLOCKED"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{resource.project.id = \"$project\"} | select(span.task.id, span.task.title, span.task.status, span.task.type)",
+          "limit": 50,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Workflow Runs",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "id": 101,
+      "collapsed": false
+    },
+    {
+      "id": 3,
+      "title": "Workflow Executions",
+      "type": "table",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "workflow.status"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "running": {
+                        "color": "blue",
+                        "text": "RUNNING"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "completed": {
+                        "color": "green",
+                        "text": "COMPLETED"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "failed": {
+                        "color": "red",
+                        "text": "FAILED"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{name =~ \"workflow.*\"} | select(resource.project.id, span.workflow.id, span.workflow.status, span.workflow.type, duration)",
+          "limit": 50,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Workflow Trigger",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "id": 102,
+      "collapsed": false
+    },
+    {
+      "id": 12,
+      "title": "Trigger Workflow - ${project}",
+      "type": "contextcore-workflow-panel",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "options": {
+        "apiUrl": "http://localhost:8080",
+        "projectId": "$project",
+        "showDryRun": true,
+        "showExecute": true,
+        "confirmExecution": true,
+        "refreshInterval": 10
+      }
+    },
+    {
+      "id": 13,
+      "title": "CLI Commands (Fallback)",
+      "type": "text",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "options": {
+        "content": "### Run Workflows via CLI\n\nIf the workflow panel is not available, use the CLI:\n\n```bash\n# Dry run (preview without executing)\ncontextcore workflow run --project ${project} --dry-run\n\n# Execute workflow\ncontextcore workflow run --project ${project}\n\n# Check workflow status\ncontextcore workflow status --id <workflow-id>\n```\n\n### Plugin Installation\n\nTo enable the workflow trigger panel:\n\n```bash\ncd contextcore-grafana\nnpm install && npm run build\ndocker compose restart grafana\n```",
+        "mode": "markdown"
+      }
+    }
+  ]
+}

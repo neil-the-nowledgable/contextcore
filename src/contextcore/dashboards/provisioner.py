@@ -2,23 +2,34 @@
 Dashboard provisioner for Grafana.
 
 Handles provisioning ContextCore dashboards to Grafana via API.
-Supports auto-detection of Grafana URL and idempotent provisioning.
+Supports auto-detection of Grafana URL, idempotent provisioning,
+and auto-discovery of dashboards from extension folders.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import httpx
+
+from contextcore.dashboards.discovery import (
+    EXTENSION_REGISTRY,
+    DashboardConfig as DiscoveryConfig,
+    discover_all_dashboards,
+    get_dashboard_root,
+)
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class DashboardConfig:
-    """Configuration for a dashboard to provision."""
+    """Configuration for a dashboard to provision (legacy format for backwards compatibility)."""
 
     name: str
     uid: str
@@ -28,33 +39,17 @@ class DashboardConfig:
     tags: list[str] = field(default_factory=lambda: ["contextcore"])
 
 
-# Default dashboards to provision
-DEFAULT_DASHBOARDS = [
-    DashboardConfig(
-        name="Project Portfolio Overview",
-        uid="contextcore-portfolio",
-        file_name="portfolio.json",
-        description="Portfolio-level view of all projects with health indicators",
-    ),
-    DashboardConfig(
-        name="Value Capabilities Dashboard",
-        uid="contextcore-value-capabilities",
-        file_name="value-capabilities.json",
-        description="Developer dashboard for exploring value capabilities with multi-level filtering",
-        tags=["contextcore", "value", "capabilities", "developer"],
-    ),
-]
-
-
 class DashboardProvisioner:
     """
     Provision ContextCore dashboards to Grafana.
 
     Supports:
+    - Auto-discovery of dashboards from extension folders
     - Auto-detection of Grafana URL from environment
     - API key or basic auth authentication
     - Idempotent provisioning (safe to run multiple times)
-    - Folder organization
+    - Per-extension folder organization
+    - Extension filtering (provision only specific extensions)
     - Dry-run mode for preview
 
     Example:
@@ -62,7 +57,13 @@ class DashboardProvisioner:
             grafana_url="http://localhost:3000",
             api_key="your-api-key"
         )
+
+        # Provision all dashboards
         results = provisioner.provision_all()
+
+        # Provision only core dashboards
+        results = provisioner.provision_all(extension="core")
+
         for name, success, message in results:
             print(f"{name}: {'OK' if success else 'FAILED'} - {message}")
     """
@@ -73,7 +74,6 @@ class DashboardProvisioner:
         api_key: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        folder_name: str = "ContextCore",
     ):
         """
         Initialize the provisioner.
@@ -83,7 +83,6 @@ class DashboardProvisioner:
             api_key: Grafana API key. Auto-detected from GRAFANA_API_KEY env var.
             username: Basic auth username. Auto-detected from GRAFANA_USERNAME env var.
             password: Basic auth password. Auto-detected from GRAFANA_PASSWORD env var.
-            folder_name: Name of the folder to organize dashboards.
         """
         self.grafana_url = (
             grafana_url or os.environ.get("GRAFANA_URL", "http://localhost:3000")
@@ -91,9 +90,8 @@ class DashboardProvisioner:
         self.api_key = api_key or os.environ.get("GRAFANA_API_KEY")
         self.username = username or os.environ.get("GRAFANA_USERNAME", "admin")
         self.password = password or os.environ.get("GRAFANA_PASSWORD", "admin")
-        self.folder_name = folder_name
-        self._folder_id: Optional[int] = None
-        self._dashboards_dir = Path(__file__).parent
+        self._folder_cache: dict[str, int] = {}  # folder_uid -> folder_id
+        self._dashboard_root = get_dashboard_root()
 
     def _get_headers(self) -> dict[str, str]:
         """Get HTTP headers for Grafana API requests."""
@@ -108,12 +106,39 @@ class DashboardProvisioner:
             return None
         return (self.username, self.password)
 
-    def _ensure_folder(self, client: httpx.Client) -> int:
-        """Ensure the ContextCore folder exists and return its ID."""
-        if self._folder_id is not None:
-            return self._folder_id
+    def _ensure_folder(
+        self, client: httpx.Client, folder_name: str, folder_uid: str
+    ) -> int:
+        """
+        Ensure a folder exists in Grafana and return its ID.
 
-        # Check if folder exists
+        Args:
+            client: HTTP client
+            folder_name: Display name for the folder
+            folder_uid: Unique identifier for the folder
+
+        Returns:
+            Folder ID for use in dashboard provisioning
+        """
+        # Check cache first
+        if folder_uid in self._folder_cache:
+            return self._folder_cache[folder_uid]
+
+        # Check if folder exists by UID
+        try:
+            response = client.get(
+                f"{self.grafana_url}/api/folders/{folder_uid}",
+                headers=self._get_headers(),
+                auth=self._get_auth(),
+            )
+            if response.status_code == 200:
+                folder_data = response.json()
+                self._folder_cache[folder_uid] = folder_data["id"]
+                return folder_data["id"]
+        except Exception:
+            pass
+
+        # Check if folder exists by name (fallback)
         response = client.get(
             f"{self.grafana_url}/api/folders",
             headers=self._get_headers(),
@@ -123,63 +148,90 @@ class DashboardProvisioner:
 
         folders = response.json()
         for folder in folders:
-            if folder.get("title") == self.folder_name:
-                self._folder_id = folder["id"]
-                return self._folder_id
+            if folder.get("title") == folder_name or folder.get("uid") == folder_uid:
+                self._folder_cache[folder_uid] = folder["id"]
+                return folder["id"]
 
         # Create folder
         response = client.post(
             f"{self.grafana_url}/api/folders",
             headers=self._get_headers(),
             auth=self._get_auth(),
-            json={"title": self.folder_name},
+            json={"title": folder_name, "uid": folder_uid},
         )
         response.raise_for_status()
-        self._folder_id = response.json()["id"]
-        return self._folder_id
+        folder_id = response.json()["id"]
+        self._folder_cache[folder_uid] = folder_id
+        logger.info(f"Created folder '{folder_name}' (uid: {folder_uid})")
+        return folder_id
 
-    def _load_dashboard_json(self, file_name: str) -> dict:
-        """Load dashboard JSON from file."""
-        file_path = self._dashboards_dir / file_name
+    def _load_dashboard_json(self, config: DiscoveryConfig) -> dict:
+        """
+        Load dashboard JSON from file.
+
+        Args:
+            config: Discovery config with file path information
+
+        Returns:
+            Dashboard JSON as dictionary
+
+        Raises:
+            FileNotFoundError: If dashboard file cannot be found
+        """
+        file_path = config.effective_file_path
         if not file_path.exists():
-            raise FileNotFoundError(f"Dashboard file not found: {file_path}")
+            # Try alternative paths
+            alt_paths = [
+                self._dashboard_root / config.extension / config.file_name,
+                self._dashboard_root / config.extension / f"{config.uid}.json",
+                Path(config.file_name) if config.file_name else None,
+            ]
+            for alt_path in alt_paths:
+                if alt_path and alt_path.exists():
+                    file_path = alt_path
+                    break
+            else:
+                raise FileNotFoundError(f"Dashboard file not found: {file_path}")
 
-        with open(file_path) as f:
+        with open(file_path, encoding="utf-8") as f:
             return json.load(f)
 
     def provision_dashboard(
         self,
-        config: DashboardConfig,
+        config: DiscoveryConfig,
         dry_run: bool = False,
-    ) -> tuple[str, bool, str]:
+    ) -> Tuple[str, bool, str]:
         """
         Provision a single dashboard to Grafana.
 
         Args:
-            config: Dashboard configuration
+            config: Dashboard configuration from discovery
             dry_run: If True, only validate without applying
 
         Returns:
-            Tuple of (dashboard_name, success, message)
+            Tuple of (dashboard_title, success, message)
         """
         try:
-            dashboard_json = self._load_dashboard_json(config.file_name)
+            dashboard_json = self._load_dashboard_json(config)
         except FileNotFoundError as e:
-            return (config.name, False, str(e))
+            return (config.title or config.uid, False, str(e))
 
         if dry_run:
-            return (config.name, True, "Dry run - would provision")
+            return (config.title or config.uid, True, f"Dry run - would provision to {config.folder}")
 
         try:
             with httpx.Client(timeout=30.0) as client:
-                folder_id = self._ensure_folder(client)
+                # Get folder for this extension
+                folder_id = self._ensure_folder(
+                    client, config.folder, config.folder_uid
+                )
 
                 # Prepare dashboard payload
                 payload = {
                     "dashboard": dashboard_json,
                     "folderId": folder_id,
                     "overwrite": True,
-                    "message": "Provisioned by ContextCore",
+                    "message": f"Provisioned by ContextCore ({config.extension})",
                 }
 
                 # Create/update dashboard
@@ -193,68 +245,106 @@ class DashboardProvisioner:
                 if response.status_code == 200:
                     data = response.json()
                     return (
-                        config.name,
+                        config.title or config.uid,
                         True,
-                        f"Provisioned: {data.get('url', config.uid)}",
+                        f"Provisioned to {config.folder}: {data.get('url', config.uid)}",
                     )
                 else:
                     return (
-                        config.name,
+                        config.title or config.uid,
                         False,
                         f"HTTP {response.status_code}: {response.text}",
                     )
 
         except httpx.ConnectError:
-            return (config.name, False, f"Cannot connect to Grafana at {self.grafana_url}")
+            return (
+                config.title or config.uid,
+                False,
+                f"Cannot connect to Grafana at {self.grafana_url}",
+            )
         except Exception as e:
-            return (config.name, False, str(e))
+            return (config.title or config.uid, False, str(e))
 
     def provision_all(
         self,
         dry_run: bool = False,
-        dashboards: Optional[list[DashboardConfig]] = None,
-    ) -> list[tuple[str, bool, str]]:
+        extension: Optional[str] = None,
+    ) -> List[Tuple[str, bool, str]]:
         """
-        Provision all ContextCore dashboards.
+        Provision all discovered dashboards to Grafana.
+
+        Uses auto-discovery to find all dashboards in extension folders
+        and provisions them to the appropriate Grafana folders.
 
         Args:
             dry_run: If True, only validate without applying
-            dashboards: Optional list of dashboards to provision (defaults to all)
+            extension: Optional extension to filter by (e.g., "core", "squirrel")
 
         Returns:
-            List of (dashboard_name, success, message) tuples
+            List of (dashboard_title, success, message) tuples
+
+        Example:
+            # Provision all dashboards
+            results = provisioner.provision_all()
+
+            # Provision only squirrel dashboards
+            results = provisioner.provision_all(extension="squirrel")
         """
-        if dashboards is None:
-            dashboards = DEFAULT_DASHBOARDS
+        # Discover dashboards using the discovery module
+        dashboards = discover_all_dashboards(extension=extension)
+
+        if not dashboards:
+            logger.warning(
+                f"No dashboards found{f' for extension {extension}' if extension else ''}"
+            )
+            return []
+
+        logger.info(
+            f"Provisioning {len(dashboards)} dashboards"
+            f"{f' for extension {extension}' if extension else ''}"
+        )
 
         results = []
         for config in dashboards:
             result = self.provision_dashboard(config, dry_run=dry_run)
             results.append(result)
+            status = "OK" if result[1] else "FAILED"
+            logger.debug(f"  {result[0]}: {status}")
 
         return results
 
-    def list_provisioned(self) -> list[dict]:
+    def list_provisioned(self, extension: Optional[str] = None) -> List[dict]:
         """
         List ContextCore dashboards currently in Grafana.
+
+        Args:
+            extension: Optional extension to filter by
 
         Returns:
             List of dashboard info dicts with uid, title, url
         """
         try:
             with httpx.Client(timeout=30.0) as client:
+                params = {"tag": "contextcore"}
+
+                # If extension specified, also filter by folder
+                if extension and extension in EXTENSION_REGISTRY:
+                    folder_uid = EXTENSION_REGISTRY[extension]["folder_uid"]
+                    params["folderUIDs"] = folder_uid
+
                 response = client.get(
                     f"{self.grafana_url}/api/search",
                     headers=self._get_headers(),
                     auth=self._get_auth(),
-                    params={"tag": "contextcore"},
+                    params=params,
                 )
                 response.raise_for_status()
                 return response.json()
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to list dashboards: {e}")
             return []
 
-    def delete_dashboard(self, uid: str) -> tuple[bool, str]:
+    def delete_dashboard(self, uid: str) -> Tuple[bool, str]:
         """
         Delete a dashboard by UID.
 
@@ -284,15 +374,60 @@ class DashboardProvisioner:
         except Exception as e:
             return (False, str(e))
 
-    def delete_all(self) -> list[tuple[str, bool, str]]:
+    def delete_all(
+        self, extension: Optional[str] = None
+    ) -> List[Tuple[str, bool, str]]:
         """
         Delete all ContextCore dashboards from Grafana.
+
+        Uses auto-discovery to find dashboards to delete.
+
+        Args:
+            extension: Optional extension to filter by
 
         Returns:
             List of (uid, success, message) tuples
         """
+        # Discover dashboards using the discovery module
+        dashboards = discover_all_dashboards(extension=extension)
+
         results = []
-        for config in DEFAULT_DASHBOARDS:
+        for config in dashboards:
             success, message = self.delete_dashboard(config.uid)
             results.append((config.uid, success, message))
+
         return results
+
+
+# Backwards compatibility: provide DEFAULT_DASHBOARDS for existing code
+# This will be populated lazily from discovery
+_default_dashboards_cache: Optional[List[DashboardConfig]] = None
+
+
+def get_default_dashboards() -> List[DashboardConfig]:
+    """
+    Get default dashboards for backwards compatibility.
+
+    Returns legacy DashboardConfig objects converted from discovery.
+    """
+    global _default_dashboards_cache
+    if _default_dashboards_cache is None:
+        _default_dashboards_cache = []
+        for config in discover_all_dashboards():
+            _default_dashboards_cache.append(
+                DashboardConfig(
+                    name=config.title or config.uid,
+                    uid=config.uid,
+                    file_name=config.file_name or f"{config.uid}.json",
+                    description=config.description,
+                    folder=config.folder,
+                    tags=config.tags or ["contextcore"],
+                )
+            )
+    return _default_dashboards_cache
+
+
+# For backwards compatibility, DEFAULT_DASHBOARDS is now a property-like access
+# Code that imports DEFAULT_DASHBOARDS will get an empty list initially,
+# but can call get_default_dashboards() for the full list
+DEFAULT_DASHBOARDS: List[DashboardConfig] = []
