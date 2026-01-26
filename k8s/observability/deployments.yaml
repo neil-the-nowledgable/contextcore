@@ -256,6 +256,8 @@ spec:
               value: admin
             - name: GF_SECURITY_ADMIN_PASSWORD
               value: admin
+            - name: GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS
+              value: "011ybubo-chat-panel,011ybubo-datasource,contextcore-chat-panel,contextcore-workflow-panel,contextcore-datasource"
           ports:
             - containerPort: 3000
               name: http
@@ -266,6 +268,18 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards
             - name: contextcore-dashboards
               mountPath: /var/lib/grafana/dashboards/contextcore
+            # O11yBubo plugins (mounted from Kind host)
+            - name: plugin-011ybubo-chat-panel
+              mountPath: /var/lib/grafana/plugins/011ybubo-chat-panel
+            - name: plugin-011ybubo-datasource
+              mountPath: /var/lib/grafana/plugins/011ybubo-datasource
+            # ContextCore plugins (mounted from Kind host)
+            - name: plugin-contextcore-chat-panel
+              mountPath: /var/lib/grafana/plugins/contextcore-chat-panel
+            - name: plugin-contextcore-workflow-panel
+              mountPath: /var/lib/grafana/plugins/contextcore-workflow-panel
+            - name: plugin-contextcore-datasource
+              mountPath: /var/lib/grafana/plugins/contextcore-datasource
           resources:
             limits:
               cpu: 500m
@@ -296,3 +310,25 @@ spec:
           configMap:
             name: contextcore-dashboards
             optional: true
+        # O11yBubo plugins (hostPath from Kind extraMounts)
+        - name: plugin-011ybubo-chat-panel
+          hostPath:
+            path: /plugins/011ybubo/011ybubo-chat-panel
+            type: DirectoryOrCreate
+        - name: plugin-011ybubo-datasource
+          hostPath:
+            path: /plugins/011ybubo/011ybubo-datasource
+            type: DirectoryOrCreate
+        # ContextCore plugins (hostPath from Kind extraMounts)
+        - name: plugin-contextcore-chat-panel
+          hostPath:
+            path: /plugins/contextcore/contextcore-chat-panel
+            type: DirectoryOrCreate
+        - name: plugin-contextcore-workflow-panel
+          hostPath:
+            path: /plugins/contextcore/contextcore-workflow-panel
+            type: DirectoryOrCreate
+        - name: plugin-contextcore-datasource
+          hostPath:
+            path: /plugins/contextcore/contextcore-datasource
+            type: DirectoryOrCreate

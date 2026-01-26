@@ -26,6 +26,7 @@ We honor the indigenous peoples of Michigan and the Great Lakes region by includ
 | **contextcore-coyote** | Coyote | Wiisagi-ma'iingan | wee-SAH-gee-MAH-een-gahn | — |
 | **contextcore-beaver** | Beaver | Amik | ah-MIK | "Beaver" |
 | **contextcore-squirrel** | Squirrel | Ajidamoo | ah-JID-ah-moo | "Red squirrel" |
+| **contextcore-grafana** | Owl | Gookooko'oo | goo-koo-KOH-oh | "Owl" |
 
 ### Why These Animals?
 
@@ -40,6 +41,8 @@ We honor the indigenous peoples of Michigan and the Great Lakes region by includ
 **Beaver (Amik)** — The beaver is nature's master builder, known for constructing complex dams and lodges that transform environments. The Beaver expansion pack (formerly startd8) provides LLM provider abstraction—building the infrastructure layer that connects applications to multiple AI providers (OpenAI, Anthropic, local models) with unified interfaces, cost tracking, and token accounting.
 
 **Squirrel (Ajidamoo)** — The squirrel is known for gathering, storing, and retrieving nuts with remarkable memory and efficiency. The Squirrel expansion pack (formerly contextcore-skills) provides a skills library for token-efficient agent discovery—gathering capabilities, protocols, and workflows that agents can retrieve as needed without loading entire context files.
+
+**Owl (Gookooko'oo)** — The owl is renowned for its exceptional vision, watchful nature, and wisdom. In many traditions, the owl sees what others cannot, observing patterns in the darkness. The Owl expansion pack (contextcore-grafana) provides Grafana plugins for visualization and monitoring—workflow trigger panels, chat interfaces, and datasources that watch over systems and reveal insights through dashboards.
 
 ## Cultural Context
 

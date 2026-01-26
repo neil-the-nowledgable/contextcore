@@ -112,6 +112,46 @@ ContextCore/
 - `pip3` instead of `pip`
 - `python3 -m module` instead of `python -m module`
 
+## Code Generation Workflows
+
+ContextCore uses a two-tier contractor pattern for code generation:
+
+### Prime Contractor (Recommended)
+
+The Prime Contractor wraps the Lead Contractor with **continuous integration** to prevent merge conflicts:
+
+```bash
+# Import features from backlog and integrate one by one
+python3 scripts/prime_contractor/cli.py run --import-backlog
+
+# Preview what would happen
+python3 scripts/prime_contractor/cli.py run --import-backlog --dry-run
+
+# Show queue status
+python3 scripts/prime_contractor/cli.py status
+
+# Retry a failed feature
+python3 scripts/prime_contractor/cli.py retry feature_id
+```
+
+**Why use Prime Contractor?** It prevents the "backlog integration nightmare" where multiple features developed in isolation create merge conflicts when integrated all at once.
+
+See [docs/PRIME_CONTRACTOR_WORKFLOW.md](docs/PRIME_CONTRACTOR_WORKFLOW.md) for full documentation.
+
+### Lead Contractor (Lower-level)
+
+The Lead Contractor generates code but doesn't integrate immediately:
+
+```bash
+# Scan backlog and show integration plan
+python3 scripts/lead_contractor/integrate_backlog.py --list
+
+# Integrate with conflict detection
+python3 scripts/lead_contractor/run_integrate_backlog_workflow.py
+```
+
+**⚠️ Warning**: Using Lead Contractor without Prime Contractor for multiple features can cause merge conflicts.
+
 ## Commands
 
 ```bash
@@ -436,6 +476,7 @@ See [docs/EXPANSION_PACKS.md](docs/EXPANSION_PACKS.md) for full expansion pack d
 - [docs/dashboards/PROJECT_DETAILS.md](docs/dashboards/PROJECT_DETAILS.md) — Project details dashboard spec
 - [docs/EXPANSION_PACKS.md](docs/EXPANSION_PACKS.md) — Expansion pack registry
 - [docs/NAMING_CONVENTION.md](docs/NAMING_CONVENTION.md) — Animal naming convention
+- [docs/DEPENDENCY_MANIFEST_PATTERN.md](docs/DEPENDENCY_MANIFEST_PATTERN.md) — External dependency tracking pattern
 
 ## Examples
 

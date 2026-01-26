@@ -100,8 +100,51 @@ print(f'Conflicts: {len(plan.get(\"conflicts\", {}))}')  # Should be 0
 
 ---
 
+## Lessons Learned & Prevention
+
+### Root Cause
+
+These conflicts occurred because multiple features were generated in isolation and then integrated all at once. Each feature was developed without knowledge of changes from other features, leading to overlapping modifications to the same files.
+
+### Prevention: Prime Contractor Workflow
+
+To prevent this in the future, use the **Prime Contractor workflow** which integrates each feature immediately after generation:
+
+```bash
+# Instead of generating all features and integrating later:
+# ❌ python3 scripts/lead_contractor/run_all.py
+# ❌ python3 scripts/lead_contractor/run_integrate_backlog_workflow.py
+
+# Use Prime Contractor for continuous integration:
+# ✅ python3 scripts/prime_contractor/cli.py run --import-backlog
+```
+
+### Key Patterns
+
+| Pattern | Description |
+|---------|-------------|
+| **Integrate Immediately** | Each feature integrated right after generation |
+| **Checkpoint Validation** | Syntax, import, lint, test checks before next feature |
+| **Fail Fast** | Stop on failure, fix before continuing |
+| **Atomic Commits** | Each feature committed separately |
+
+### Anti-Patterns to Avoid
+
+| Anti-Pattern | Problem |
+|--------------|---------|
+| **Backlog Accumulation** | Features pile up without integration |
+| **Big Bang Integration** | All features integrated at once |
+| **Skip Validation** | Problems compound undetected |
+| **Context Loss** | Features unaware of each other's changes |
+
+See [docs/CODE_GENERATION_PATTERNS.md](docs/CODE_GENERATION_PATTERNS.md) for full pattern documentation.
+
+---
+
 ## Related Documentation
 
+- `docs/CODE_GENERATION_PATTERNS.md` - **Patterns & anti-patterns for code generation**
+- `docs/PRIME_CONTRACTOR_WORKFLOW.md` - **Prime Contractor workflow documentation**
 - `CONFLICT_RESOLUTION_GUIDE.md` - General conflict resolution guide
 - `WORKFLOW_ADJUSTMENTS_AFTER_CONFLICT_RESOLUTION.md` - Workflow improvements
 - `MERGE_IMPLEMENTATION_SUMMARY.md` - Merge functionality documentation
