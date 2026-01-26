@@ -31,7 +31,7 @@ Reorganize dashboards from flat `json/` folder into extension-specific folders.
 
 ### Implementation Notes
 - Created `dashboard_reorganize.py` CLI tool for reorganization
-- Added owl/ folder for contextcore-grafana (Owl) expansion pack
+- Added owl/ folder for contextcore-owl (Owl) expansion pack
 - Tool supports dry-run mode and generates uid_mapping.log
 
 ---

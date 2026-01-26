@@ -181,12 +181,13 @@ ecosystem:
       purpose: "Skills library for token-efficient agent discovery and knowledge storage"
       status: "beta"
       formerName: "contextcore-skills"
-    - name: "contextcore-grafana"
+    - name: "contextcore-owl"
       animal: "Owl"
       anishinaabe: "Gookooko'oo"
       meaning: "Owl (watchful, excellent vision)"
       purpose: "Unified Grafana plugin package (workflow triggers, chat panels, datasources)"
       status: "beta"
+      formerName: "contextcore-grafana"
       dependsOn: ["contextcore-beaver"]  # Optional, for scaffold script LLM generation
 
 # Dashboards (11 total, provisioned to Grafana)

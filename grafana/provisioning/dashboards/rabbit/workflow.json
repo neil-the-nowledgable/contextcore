@@ -367,7 +367,7 @@
         "y": 19
       },
       "options": {
-        "content": "### Run Workflows via CLI\n\nIf the workflow panel is not available, use the CLI:\n\n```bash\n# Dry run (preview without executing)\ncontextcore workflow run --project ${project} --dry-run\n\n# Execute workflow\ncontextcore workflow run --project ${project}\n\n# Check workflow status\ncontextcore workflow status --id <workflow-id>\n```\n\n### Plugin Installation\n\nTo enable the workflow trigger panel:\n\n```bash\ncd contextcore-grafana\nnpm install && npm run build\ndocker compose restart grafana\n```",
+        "content": "### Run Workflows via CLI\n\nIf the workflow panel is not available, use the CLI:\n\n```bash\n# Dry run (preview without executing)\ncontextcore workflow run --project ${project} --dry-run\n\n# Execute workflow\ncontextcore workflow run --project ${project}\n\n# Check workflow status\ncontextcore workflow status --id <workflow-id>\n```\n\n### Plugin Installation\n\nTo enable the workflow trigger panel:\n\n```bash\ncd contextcore-owl\nnpm install && npm run build\ndocker compose restart grafana\n```",
         "mode": "markdown"
       }
     }
