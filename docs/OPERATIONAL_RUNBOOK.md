@@ -14,6 +14,17 @@ make backup      # Create timestamped backup
 make destroy     # Delete stack (auto-backup + confirmation)
 ```
 
+## Environment Notice
+
+**Two environments exist until datasets are merged:**
+
+| Environment | Path | Grafana Password | Purpose |
+|-------------|------|------------------|---------|
+| **DEV** | `~/Documents/dev/ContextCore` | `admin` | Development, newer code |
+| **TEST** | `~/Documents/Deploy` | `adminadminadmin` | Testing, stable deployments |
+
+Both target the `observability` namespace in the `o11y-dev` Kind cluster. Use the Grafana password to identify which environment you're connected to.
+
 ## Daily Operations
 
 ### Starting the Stack
