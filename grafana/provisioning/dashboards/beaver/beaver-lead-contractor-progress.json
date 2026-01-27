@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "uid": "beaver-lead-contractor",
+  "uid": "contextcore-beaver-lead-contractor-progress",
   "title": "[BEAVER] Lead Contractor Progress",
   "description": "Track project progress with StartD8 SDK Lead Contractor integration - task status and execution traces from Tempo",
   "tags": [
