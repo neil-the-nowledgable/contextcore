@@ -64,20 +64,21 @@ export const WorkflowPanel: React.FC<Props> = ({ options, width, height }) => {
     setDryRunSteps(null);
 
     try {
-      const res = await fetch(`${options.apiUrl}/workflow/dry-run`, {
+      const res = await fetch(`${options.apiUrl}/workflow/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: resolvedProjectId }),
+        body: JSON.stringify({ project_id: resolvedProjectId, dry_run: true }),
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
       }
 
       const data: DryRunResponse = await res.json();
 
-      if (data.status === 'success') {
-        setDryRunSteps(data.steps);
+      if (data.status === 'started' || data.steps) {
+        setDryRunSteps(data.steps || []);
         setRunId(data.run_id);
       } else {
         setError(data.error || 'Dry run failed');
@@ -104,14 +105,15 @@ export const WorkflowPanel: React.FC<Props> = ({ options, width, height }) => {
     setDryRunSteps(null);
 
     try {
-      const res = await fetch(`${options.apiUrl}/workflow/execute`, {
+      const res = await fetch(`${options.apiUrl}/workflow/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_id: resolvedProjectId }),
+        body: JSON.stringify({ project_id: resolvedProjectId, dry_run: false }),
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`);
       }
 
       const data: ExecuteResponse = await res.json();
