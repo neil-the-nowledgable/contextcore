@@ -90,6 +90,8 @@ class PrimeContractorWorkflow:
         auto_commit: bool = False,
         strict_checkpoints: bool = False,
         max_retries: int = 2,
+        allow_dirty: bool = False,
+        auto_stash: bool = False,
         on_feature_complete: Optional[Callable[[FeatureSpec], None]] = None,
         on_checkpoint_failed: Optional[Callable[[FeatureSpec, List[CheckpointResult]], None]] = None,
     ):
@@ -98,8 +100,13 @@ class PrimeContractorWorkflow:
         self.auto_commit = auto_commit
         self.strict_checkpoints = strict_checkpoints
         self.max_retries = max_retries
+        self.allow_dirty = allow_dirty
+        self.auto_stash = auto_stash
         self.on_feature_complete = on_feature_complete
         self.on_checkpoint_failed = on_checkpoint_failed
+
+        # Git safety: track stash reference for recovery
+        self.stash_ref: Optional[str] = None
         
         self.queue = FeatureQueue()
         self.checkpoint = IntegrationCheckpoint(
@@ -126,7 +133,188 @@ class PrimeContractorWorkflow:
         self.total_cost_usd: float = 0.0
         self.total_input_tokens: int = 0
         self.total_output_tokens: int = 0
-    
+
+    def check_git_status(self) -> Tuple[bool, List[str]]:
+        """
+        Check if git repo is clean (no uncommitted changes).
+
+        Returns:
+            Tuple of (is_clean, dirty_files)
+            - is_clean: True if no uncommitted changes
+            - dirty_files: List of files with uncommitted changes
+        """
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root
+        )
+        dirty_files = [line.strip() for line in result.stdout.strip().split('\n') if line]
+        return len(dirty_files) == 0, dirty_files
+
+    def create_safety_snapshot(self) -> Optional[str]:
+        """
+        Create a safety snapshot (git stash) before integration.
+
+        Returns:
+            Stash reference name if created, None if nothing to stash
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        stash_message = f"prime-contractor-snapshot-{timestamp}"
+
+        result = subprocess.run(
+            ["git", "stash", "push", "-m", stash_message],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root
+        )
+
+        if "No local changes to save" in result.stdout:
+            return None
+
+        if result.returncode == 0:
+            self.stash_ref = stash_message
+            return stash_message
+
+        return None
+
+    def is_file_dirty(self, path: Path) -> bool:
+        """
+        Check if a specific file has uncommitted changes.
+
+        Args:
+            path: Path to the file to check
+
+        Returns:
+            True if file has uncommitted changes
+        """
+        # Check staged changes
+        result_staged = subprocess.run(
+            ["git", "diff", "--cached", "--name-only", str(path)],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root
+        )
+
+        # Check unstaged changes
+        result_unstaged = subprocess.run(
+            ["git", "diff", "--name-only", str(path)],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root
+        )
+
+        return bool(result_staged.stdout.strip() or result_unstaged.stdout.strip())
+
+    def protect_dirty_target(self, path: Path) -> bool:
+        """
+        Check if it's safe to overwrite a target file.
+
+        Refuses to overwrite files with uncommitted changes to prevent data loss.
+
+        Args:
+            path: Path to the target file
+
+        Returns:
+            True if safe to overwrite, False if file has uncommitted changes
+        """
+        if not path.exists():
+            return True  # New file, safe to create
+
+        if self.is_file_dirty(path):
+            print(f"  Target file has uncommitted changes: {path.name}")
+            print(f"     Commit or stash changes first, then retry")
+            return False
+
+        return True
+
+    def get_recovery_status(self) -> Dict:
+        """
+        Get current recovery status information.
+
+        Returns:
+            Dict with stash_ref, backup_files, and recovery options
+        """
+        # Find backup files
+        backup_files = list(self.project_root.glob("**/*.backup"))
+
+        # Check for stash
+        result = subprocess.run(
+            ["git", "stash", "list"],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root
+        )
+        stashes = [
+            line for line in result.stdout.strip().split('\n')
+            if line and "prime-contractor-snapshot" in line
+        ]
+
+        return {
+            "stash_ref": self.stash_ref,
+            "stashes": stashes,
+            "backup_files": [str(f) for f in backup_files],
+            "has_recovery_options": bool(stashes or backup_files),
+        }
+
+    def recover_from_stash(self) -> bool:
+        """
+        Recover from the most recent prime-contractor stash.
+
+        Returns:
+            True if recovery succeeded
+        """
+        # Find prime-contractor stashes
+        result = subprocess.run(
+            ["git", "stash", "list"],
+            capture_output=True,
+            text=True,
+            cwd=self.project_root
+        )
+
+        for line in result.stdout.strip().split('\n'):
+            if "prime-contractor-snapshot" in line:
+                # Extract stash reference (e.g., "stash@{0}")
+                stash_id = line.split(":")[0]
+                print(f"  Recovering from: {line}")
+
+                pop_result = subprocess.run(
+                    ["git", "stash", "pop", stash_id],
+                    capture_output=True,
+                    text=True,
+                    cwd=self.project_root
+                )
+
+                if pop_result.returncode == 0:
+                    print(f"  Recovery successful")
+                    return True
+                else:
+                    print(f"  Recovery failed: {pop_result.stderr}")
+                    return False
+
+        print("  No prime-contractor stash found")
+        return False
+
+    def recover_file_from_backup(self, file_path: Path) -> bool:
+        """
+        Recover a specific file from its .backup copy.
+
+        Args:
+            file_path: Path to the file to recover
+
+        Returns:
+            True if recovery succeeded
+        """
+        backup_path = file_path.with_suffix(file_path.suffix + ".backup")
+
+        if not backup_path.exists():
+            print(f"  No backup found: {backup_path}")
+            return False
+
+        shutil.copy2(backup_path, file_path)
+        print(f"  Restored: {file_path} from {backup_path.name}")
+        return True
+
     def import_from_backlog(self) -> int:
         """
         Import features from the Lead Contractor's generated backlog.
@@ -600,6 +788,12 @@ class PrimeContractorWorkflow:
                 integrated_files.append(target_path)
                 continue
 
+            # Target file protection: refuse to overwrite files with uncommitted changes
+            if target_path.exists() and not self.allow_dirty:
+                if not self.protect_dirty_target(target_path):
+                    print(f"  Skipping {target_path.name} to protect uncommitted changes")
+                    continue
+
             # Check if we need to merge with existing content
             if target_path.exists():
                 # Detect merge strategy
@@ -776,6 +970,55 @@ class PrimeContractorWorkflow:
         print(f"Mode: {'DRY RUN' if self.dry_run else 'LIVE'}")
         print(f"Auto-commit: {self.auto_commit}")
         print(f"Stop on failure: {stop_on_failure}")
+
+        # Pre-flight check: block if repo has uncommitted changes (unless --allow-dirty or --auto-stash)
+        is_clean, dirty_files = self.check_git_status()
+        if not is_clean:
+            print(f"\n{'='*70}")
+            if self.auto_stash:
+                print("AUTO-STASH: Repository has uncommitted changes")
+            elif self.allow_dirty:
+                print("WARNING: Repository has uncommitted changes (--allow-dirty set)")
+            else:
+                print("BLOCKED: Repository has uncommitted changes")
+            print(f"{'='*70}")
+            print(f"  {len(dirty_files)} file(s) with uncommitted changes:")
+            for f in dirty_files[:10]:  # Show first 10
+                print(f"    {f}")
+            if len(dirty_files) > 10:
+                print(f"    ... and {len(dirty_files) - 10} more")
+
+            if self.auto_stash:
+                # Automatically stash changes before proceeding
+                print("\n  Creating safety snapshot...")
+                stash_ref = self.create_safety_snapshot()
+                if stash_ref:
+                    print(f"  Stashed as: {stash_ref}")
+                    print("  To recover: python scripts/prime_contractor/cli.py recover --to-snapshot")
+                    print()
+                else:
+                    print("  Warning: Failed to create stash, proceeding anyway...")
+            elif not self.allow_dirty:
+                print("\n  Options:")
+                print("    1. Commit your changes:  git add . && git commit -m \"WIP\"")
+                print("    2. Stash your changes:   git stash")
+                print("    3. Auto-stash:           --auto-stash (recommended)")
+                print("    4. Force proceed:        --allow-dirty (not recommended)")
+                print("\n  Aborting to protect your uncommitted work.")
+                return {
+                    "processed": 0,
+                    "succeeded": 0,
+                    "failed": 0,
+                    "progress": self.queue.get_progress(),
+                    "history": [],
+                    "total_cost_usd": 0.0,
+                    "total_input_tokens": 0,
+                    "total_output_tokens": 0,
+                    "aborted": True,
+                    "abort_reason": "uncommitted_changes",
+                }
+            else:
+                print("\n  Proceeding anyway (--allow-dirty)...\n")
 
         # Emit workflow started insight (BLC-008)
         self.insight_emitter.emit(
