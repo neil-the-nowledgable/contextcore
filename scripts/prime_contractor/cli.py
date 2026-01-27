@@ -39,23 +39,27 @@ def cmd_run(args):
     workflow = PrimeContractorWorkflow(
         dry_run=args.dry_run,
         auto_commit=args.auto_commit,
-        strict_checkpoints=args.strict
+        strict_checkpoints=args.strict,
+        allow_dirty=args.allow_dirty,
+        auto_stash=args.auto_stash
     )
-    
+
     # Import from backlog if requested
     if args.import_backlog:
         count = workflow.import_from_backlog()
         if count == 0 and not workflow.queue.features:
             print("No features to process. Add features or import from backlog.")
             return
-    
+
     # Run workflow
     result = workflow.run(
         max_features=args.max_features,
         stop_on_failure=not args.continue_on_failure
     )
-    
-    # Exit with error code if there were failures
+
+    # Exit with error code if there were failures or workflow was aborted
+    if result.get("aborted"):
+        sys.exit(1)
     if result["failed"] > 0:
         sys.exit(1)
 
@@ -268,6 +272,70 @@ def cmd_validate(args):
         print(f"\n✓ All files are valid for integration")
 
 
+def cmd_recover(args):
+    """Recover from a failed integration."""
+    workflow = PrimeContractorWorkflow()
+
+    if args.status:
+        # Show recovery status
+        print("=" * 70)
+        print("RECOVERY STATUS")
+        print("=" * 70)
+
+        status = workflow.get_recovery_status()
+
+        if status["stashes"]:
+            print("\nPrime Contractor stashes:")
+            for stash in status["stashes"]:
+                print(f"  {stash}")
+        else:
+            print("\nNo prime-contractor stashes found")
+
+        if status["backup_files"]:
+            print(f"\nBackup files ({len(status['backup_files'])}):")
+            for f in status["backup_files"][:10]:
+                print(f"  {f}")
+            if len(status["backup_files"]) > 10:
+                print(f"  ... and {len(status['backup_files']) - 10} more")
+        else:
+            print("\nNo backup files found")
+
+        if not status["has_recovery_options"]:
+            print("\nNo recovery options available.")
+        return
+
+    if args.to_snapshot:
+        # Recover from stash
+        print("=" * 70)
+        print("RECOVERING FROM SNAPSHOT")
+        print("=" * 70)
+
+        if workflow.recover_from_stash():
+            print("\n✓ Recovery complete")
+        else:
+            print("\n✗ Recovery failed")
+            sys.exit(1)
+        return
+
+    if args.file:
+        # Recover specific file from backup
+        print("=" * 70)
+        print("RECOVERING FILE FROM BACKUP")
+        print("=" * 70)
+
+        file_path = Path(args.file)
+        if workflow.recover_file_from_backup(file_path):
+            print("\n✓ File recovered")
+        else:
+            print("\n✗ Recovery failed")
+            sys.exit(1)
+        return
+
+    # Default: show status
+    print("Use --status to see recovery options, --to-snapshot to recover from stash,")
+    print("or --file PATH to recover a specific file from backup.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Prime Contractor: Continuous integration for Lead Contractor",
@@ -305,6 +373,10 @@ Examples:
                            help="Continue processing even if a feature fails")
     run_parser.add_argument("--strict", action="store_true",
                            help="Fail on checkpoint warnings (not just errors)")
+    run_parser.add_argument("--allow-dirty", action="store_true",
+                           help="Proceed even if repo has uncommitted changes (not recommended)")
+    run_parser.add_argument("--auto-stash", action="store_true",
+                           help="Automatically stash uncommitted changes before running (recommended)")
     run_parser.set_defaults(func=cmd_run)
     
     # Status command
@@ -356,6 +428,17 @@ Examples:
     validate_parser.add_argument("--verbose", "-v", action="store_true",
                                 help="Show details for valid files too")
     validate_parser.set_defaults(func=cmd_validate)
+
+    # Recover command
+    recover_parser = subparsers.add_parser("recover",
+                                           help="Recover from a failed integration")
+    recover_parser.add_argument("--status", "-s", action="store_true",
+                               help="Show recovery status (stashes, backups)")
+    recover_parser.add_argument("--to-snapshot", action="store_true",
+                               help="Recover from the most recent prime-contractor stash")
+    recover_parser.add_argument("--file", type=str,
+                               help="Recover a specific file from its .backup")
+    recover_parser.set_defaults(func=cmd_recover)
 
     args = parser.parse_args()
     
