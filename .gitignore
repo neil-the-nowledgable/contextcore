@@ -76,6 +76,10 @@ backups/
 # Archives and zip files
 *.zip
 
+# Backup files
+*.bak
+*.orig
+
 # Extracted archive directories
 contextcore_cfp_variants/
 contextcore_docs/
