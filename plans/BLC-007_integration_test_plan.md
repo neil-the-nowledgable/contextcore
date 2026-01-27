@@ -244,13 +244,13 @@ echo -e "\n=== API Tests Complete ==="
 
 | Test | Component | Status |
 |------|-----------|--------|
-| 1.1 | BLC-001 /workflow/run | ⬜ |
-| 1.2 | BLC-002 /workflow/status | ⬜ |
-| 1.3 | BLC-003 /workflow/history | ⬜ |
-| 2.x | Full workflow execution | ⬜ |
-| 3.x | BLC-004 WorkflowPanel | ⬜ |
-| 3.x | BLC-005 Status panels | ⬜ |
-| 4.x | BLC-007 Tempo traces | ⬜ |
+| 1.1 | BLC-001 /workflow/run | ✅ Passed 2026-01-27 |
+| 1.2 | BLC-002 /workflow/status | ✅ Passed 2026-01-27 |
+| 1.3 | BLC-003 /workflow/history | ✅ Passed 2026-01-27 |
+| 2.x | Full workflow execution | ✅ Infrastructure works, feature integration tested |
+| 3.x | BLC-004 WorkflowPanel | ✅ Implemented, pending manual test |
+| 3.x | BLC-005 Status panels | ✅ Implemented, pending manual test |
+| 4.x | BLC-007 Tempo traces | ⚠️ Requires OpenTelemetry setup |
 | 5.x | BLC-008 Insights | ⬜ (not implemented) |
 | 6.x | BLC-009 Cost tracking | ⬜ (not implemented) |
 
