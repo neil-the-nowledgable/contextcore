@@ -27,6 +27,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 from opentelemetry import trace
 
+from contextcore.tracing.insight_emitter import InsightEmitter
+
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -112,6 +114,9 @@ class PrimeContractorWorkflow:
 
         # OpenTelemetry tracer for code generation spans
         self.tracer = trace.get_tracer("contextcore.prime_contractor")
+
+        # Insight emitter for workflow decisions (BLC-008)
+        self.insight_emitter = InsightEmitter()
 
         # Size limits for proactive truncation prevention
         self.max_lines_per_feature = 150  # Safe limit for most LLMs
@@ -438,6 +443,16 @@ class PrimeContractorWorkflow:
         Returns:
             True if the feature was fully processed, False otherwise
         """
+        # Emit feature selected insight (BLC-008)
+        self.insight_emitter.emit(
+            insight_type="feature_selected",
+            summary=f"Processing feature: {feature.name}",
+            confidence=1.0,
+            feature_id=feature.id,
+            feature_name=feature.name,
+            current_status=feature.status.value if hasattr(feature.status, 'value') else str(feature.status),
+        )
+
         # Step 1: Develop if needed
         if feature.status == FeatureStatus.PENDING:
             if not self.develop_feature(feature):
@@ -482,7 +497,18 @@ class PrimeContractorWorkflow:
             print(f"     1. Regenerate with smaller scope (split into multiple features)")
             print(f"     2. Manually fix the truncated code in generated/")
             print(f"     3. Remove this feature from the queue")
-            self.queue.fail_feature(feature.id, f"Validation failed: {'; '.join(validation_errors[:2])}")
+            error_msg = f"Validation failed: {'; '.join(validation_errors[:2])}"
+            self.queue.fail_feature(feature.id, error_msg)
+            # Emit integration failed insight (BLC-008)
+            self.insight_emitter.emit(
+                insight_type="integration_failed",
+                summary=f"Feature '{feature.name}' failed validation",
+                confidence=1.0,
+                feature_id=feature.id,
+                feature_name=feature.name,
+                error=error_msg,
+                reason="validation_failed",
+            )
             return False
 
         # Check for conflict risk
@@ -593,7 +619,18 @@ class PrimeContractorWorkflow:
                     integrated_files.append(target_path)
         
         if not integrated_files:
-            self.queue.fail_feature(feature.id, "No files were integrated")
+            error_msg = "No files were integrated"
+            self.queue.fail_feature(feature.id, error_msg)
+            # Emit integration failed insight (BLC-008)
+            self.insight_emitter.emit(
+                insight_type="integration_failed",
+                summary=f"Feature '{feature.name}' failed: no files integrated",
+                confidence=1.0,
+                feature_id=feature.id,
+                feature_name=feature.name,
+                error=error_msg,
+                reason="no_files_integrated",
+            )
             return False
         
         # Track which files were modified by this feature
@@ -613,12 +650,24 @@ class PrimeContractorWorkflow:
                 # Checkpoint failed
                 failed_checks = [r for r in results if r.status == CheckpointStatus.FAILED]
                 error_msg = "; ".join(r.message for r in failed_checks)
-                
+
                 self.queue.fail_feature(feature.id, error_msg)
-                
+
+                # Emit integration failed insight (BLC-008)
+                self.insight_emitter.emit(
+                    insight_type="integration_failed",
+                    summary=f"Feature '{feature.name}' failed checkpoints",
+                    confidence=1.0,
+                    feature_id=feature.id,
+                    feature_name=feature.name,
+                    error=error_msg,
+                    reason="checkpoint_failed",
+                    failed_checks=[r.name for r in failed_checks],
+                )
+
                 if self.on_checkpoint_failed:
                     self.on_checkpoint_failed(feature, results)
-                
+
                 return False
         else:
             print("\n[DRY RUN] Would run integration checkpoints")
@@ -630,17 +679,28 @@ class PrimeContractorWorkflow:
         
         # Mark complete
         self.queue.complete_feature(feature.id)
-        
+
         # Record in history
         self.integration_history.append({
             "feature": feature.name,
             "files": [str(f) for f in integrated_files],
             "timestamp": datetime.now().isoformat()
         })
-        
+
+        # Emit integration success insight (BLC-008)
+        self.insight_emitter.emit(
+            insight_type="integration_success",
+            summary=f"Feature '{feature.name}' integrated successfully",
+            confidence=1.0,
+            feature_id=feature.id,
+            feature_name=feature.name,
+            files_count=len(integrated_files),
+            files=[str(f) for f in integrated_files],
+        )
+
         if self.on_feature_complete:
             self.on_feature_complete(feature)
-        
+
         print(f"\n✓ Feature '{feature.name}' integrated successfully!")
         return True
     
@@ -695,7 +755,18 @@ class PrimeContractorWorkflow:
         print(f"Mode: {'DRY RUN' if self.dry_run else 'LIVE'}")
         print(f"Auto-commit: {self.auto_commit}")
         print(f"Stop on failure: {stop_on_failure}")
-        
+
+        # Emit workflow started insight (BLC-008)
+        self.insight_emitter.emit(
+            insight_type="workflow_started",
+            summary=f"Starting workflow with {len(self.queue.features)} features",
+            confidence=1.0,
+            mode="dry_run" if self.dry_run else "live",
+            feature_count=len(self.queue.features),
+            auto_commit=self.auto_commit,
+            stop_on_failure=stop_on_failure,
+        )
+
         # Capture test baseline for regression detection
         if not self.dry_run:
             print("\nCapturing test baseline for regression detection...")
@@ -751,7 +822,18 @@ class PrimeContractorWorkflow:
             print("\n⚠️  Some features failed. Review errors and re-run.")
         elif features_processed > 0:
             print("\n✓ All processed features integrated successfully!")
-        
+
+        # Emit workflow completed insight (BLC-008)
+        self.insight_emitter.emit(
+            insight_type="workflow_completed",
+            summary=f"Workflow complete: {features_succeeded}/{features_processed} succeeded",
+            confidence=1.0,
+            processed=features_processed,
+            succeeded=features_succeeded,
+            failed=features_failed,
+            progress=self.queue.get_progress(),
+        )
+
         return {
             "processed": features_processed,
             "succeeded": features_succeeded,

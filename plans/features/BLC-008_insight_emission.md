@@ -50,11 +50,11 @@ class PrimeContractorWorkflow:
 ```
 
 ## Acceptance Criteria
-- [ ] InsightEmitter initialized in workflow
-- [ ] Emits insight on workflow start
-- [ ] Emits insight for each feature outcome
-- [ ] Emits summary insight on completion
-- [ ] Insights visible in Tempo traces
+- [x] InsightEmitter initialized in workflow
+- [x] Emits insight on workflow start
+- [x] Emits insight for each feature outcome
+- [x] Emits summary insight on completion
+- [ ] Insights visible in Tempo traces (requires OTel setup)
 
 ## Dependencies
 - `contextcore.agent.insights.InsightEmitter`

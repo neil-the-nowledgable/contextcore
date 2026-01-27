@@ -171,16 +171,17 @@ Check that traces include:
 
 ---
 
-### Test 5: Insight Emission (BLC-008) - Currently Not Implemented
+### Test 5: Insight Emission (BLC-008) - Implemented
 
-#### Expected Behavior (when implemented)
-Insights should appear in Tempo with:
-- `insight.type` = "decision"
+#### Expected Behavior
+Insights appear in Tempo with:
+- `insight.type` = "workflow_started" | "feature_selected" | "integration_success" | "integration_failed" | "workflow_completed"
 - `insight.summary` = workflow decision description
-- `insight.confidence` = 0.0-1.0
+- `insight.confidence` = 1.0
+- Additional context attributes (feature_id, feature_name, etc.)
 
 #### Current Status
-⚠️ BLC-008 not yet implemented - insights won't appear until InsightEmitter is integrated.
+✅ BLC-008 implemented - InsightEmitter integrated into `scripts/prime_contractor/workflow.py`
 
 ---
 
@@ -251,15 +252,15 @@ echo -e "\n=== API Tests Complete ==="
 | 3.x | BLC-004 WorkflowPanel | ✅ Implemented, pending manual test |
 | 3.x | BLC-005 Status panels | ✅ Implemented, pending manual test |
 | 4.x | BLC-007 Tempo traces | ⚠️ Requires OpenTelemetry setup |
-| 5.x | BLC-008 Insights | ⬜ (not implemented) |
+| 5.x | BLC-008 Insights | ✅ Implemented 2026-01-27 |
 | 6.x | BLC-009 Cost tracking | ⬜ (not implemented) |
 
 ---
 
 ## Known Issues / Gaps
 
-1. **BLC-006 (History Panel)** - Not yet added to dashboard
-2. **BLC-008 (Insight Emission)** - InsightEmitter not integrated into workflow
+1. **BLC-006 (History Panel)** - ✅ Implemented
+2. **BLC-008 (Insight Emission)** - ✅ Implemented (InsightEmitter integrated into workflow.py)
 3. **BLC-009 (Cost Tracking)** - Token/cost attributes not being emitted
 4. **Prime Contractor dependencies** - Requires `scripts/prime_contractor/` to be functional
 
