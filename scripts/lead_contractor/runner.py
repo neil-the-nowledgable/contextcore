@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from opentelemetry import trace
+
 from .config import (
     LEAD_AGENT,
     DRAFTER_AGENT,
@@ -43,6 +45,10 @@ class Feature:
         return ".ts" if self.is_typescript else ".py"
 
 
+# OpenTelemetry tracer for cost tracking (BLC-009)
+tracer = trace.get_tracer("contextcore.lead_contractor")
+
+
 @dataclass
 class WorkflowResult:
     """Result from a Lead Contractor workflow run."""
@@ -53,6 +59,9 @@ class WorkflowResult:
     error: Optional[str]
     total_cost: float
     iterations: int
+    input_tokens: int = 0
+    output_tokens: int = 0
+    model: str = ""
 
 
 def run_workflow(feature: Feature, verbose: bool = True) -> WorkflowResult:
@@ -87,29 +96,62 @@ def run_workflow(feature: Feature, verbose: bool = True) -> WorkflowResult:
         print(f"Language: {'TypeScript' if feature.is_typescript else 'Python'}")
         print(f"{'='*60}\n")
 
-    workflow = LeadContractorWorkflow()
+    # Wrap execution in OpenTelemetry span for cost tracking (BLC-009)
+    with tracer.start_as_current_span("lead_contractor.code_generation") as span:
+        span.set_attribute("gen_ai.operation.name", "code_generation")
+        span.set_attribute("contextcore.feature.name", feature.name)
+        span.set_attribute("contextcore.feature.language", "typescript" if feature.is_typescript else "python")
 
-    config = {
-        "task_description": feature.task,
-        "context": feature.context,
-        "lead_agent": LEAD_AGENT,
-        "drafter_agent": DRAFTER_AGENT,
-        "max_iterations": MAX_ITERATIONS,
-        "pass_threshold": PASS_THRESHOLD,
-        "integration_instructions": feature.integration_instructions,
-    }
+        workflow = LeadContractorWorkflow()
 
-    result = workflow.run(config=config)
+        config = {
+            "task_description": feature.task,
+            "context": feature.context,
+            "lead_agent": LEAD_AGENT,
+            "drafter_agent": DRAFTER_AGENT,
+            "max_iterations": MAX_ITERATIONS,
+            "pass_threshold": PASS_THRESHOLD,
+            "integration_instructions": feature.integration_instructions,
+        }
 
-    return WorkflowResult(
-        feature_name=feature.name,
-        success=result.success,
-        implementation=result.output.get("final_implementation", ""),
-        summary=result.output.get("summary", {}),
-        error=result.error,
-        total_cost=result.metrics.total_cost if result.metrics else 0,
-        iterations=result.metadata.get("total_iterations", 0),
-    )
+        result = workflow.run(config=config)
+
+        # Extract metrics from result
+        total_cost = result.metrics.total_cost if result.metrics else 0
+        iterations = result.metadata.get("total_iterations", 0)
+
+        # Extract token counts if available from metrics
+        input_tokens = 0
+        output_tokens = 0
+        model = ""
+        if result.metrics:
+            input_tokens = getattr(result.metrics, "input_tokens", 0) or 0
+            output_tokens = getattr(result.metrics, "output_tokens", 0) or 0
+            model = getattr(result.metrics, "model", "") or LEAD_AGENT
+
+        # Emit cost tracking span attributes (BLC-009)
+        span.set_attribute("gen_ai.usage.input_tokens", input_tokens)
+        span.set_attribute("gen_ai.usage.output_tokens", output_tokens)
+        span.set_attribute("gen_ai.request.model", model or LEAD_AGENT)
+        span.set_attribute("contextcore.cost.usd", total_cost)
+        span.set_attribute("contextcore.iterations", iterations)
+        span.set_attribute("contextcore.success", result.success)
+
+        if result.error:
+            span.set_attribute("error.message", result.error)
+
+        return WorkflowResult(
+            feature_name=feature.name,
+            success=result.success,
+            implementation=result.output.get("final_implementation", ""),
+            summary=result.output.get("summary", {}),
+            error=result.error,
+            total_cost=total_cost,
+            iterations=iterations,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            model=model or LEAD_AGENT,
+        )
 
 
 def extract_code(text: str, language: str = "python") -> str:
@@ -165,6 +207,9 @@ def load_existing_result(feature: Feature, output_dir: Optional[Path] = None) ->
                 error=data.get("error"),
                 total_cost=data.get("total_cost", 0),
                 iterations=data.get("iterations", 0),
+                input_tokens=data.get("input_tokens", 0),
+                output_tokens=data.get("output_tokens", 0),
+                model=data.get("model", ""),
             )
     except (json.JSONDecodeError, KeyError, IOError):
         # If file is corrupted or missing fields, treat as not found
@@ -182,7 +227,7 @@ def save_result(result: WorkflowResult, feature: Feature, output_dir: Optional[P
 
     slug = feature.name.replace(" ", "_").lower()
 
-    # Save metadata as JSON
+    # Save metadata as JSON (including BLC-009 cost tracking fields)
     meta_file = base_dir / f"{slug}_result.json"
     with open(meta_file, "w") as f:
         json.dump({
@@ -192,6 +237,9 @@ def save_result(result: WorkflowResult, feature: Feature, output_dir: Optional[P
             "error": result.error,
             "total_cost": result.total_cost,
             "iterations": result.iterations,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "model": result.model,
         }, f, indent=2)
 
     # Save implementation code

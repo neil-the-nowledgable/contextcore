@@ -121,6 +121,11 @@ class PrimeContractorWorkflow:
         # Size limits for proactive truncation prevention
         self.max_lines_per_feature = 150  # Safe limit for most LLMs
         self.max_tokens_per_feature = 500
+
+        # Cost tracking (BLC-009)
+        self.total_cost_usd: float = 0.0
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
     
     def import_from_backlog(self) -> int:
         """
@@ -413,8 +418,24 @@ class PrimeContractorWorkflow:
                 feature.status = FeatureStatus.GENERATED
                 self.queue.save_state()
 
+                # Track cumulative costs (BLC-009)
+                self.total_cost_usd += result.total_cost
+                self.total_input_tokens += result.input_tokens
+                self.total_output_tokens += result.output_tokens
+
+                # Emit cost tracking span (BLC-009)
+                with self.tracer.start_as_current_span("prime_contractor.feature_cost") as span:
+                    span.set_attribute("gen_ai.usage.input_tokens", result.input_tokens)
+                    span.set_attribute("gen_ai.usage.output_tokens", result.output_tokens)
+                    span.set_attribute("gen_ai.request.model", result.model)
+                    span.set_attribute("contextcore.cost.usd", result.total_cost)
+                    span.set_attribute("contextcore.cost.cumulative_usd", self.total_cost_usd)
+                    span.set_attribute("contextcore.feature.name", feature.name)
+                    span.set_attribute("contextcore.iterations", result.iterations)
+
                 print(f"\n✓ Code generated successfully!")
-                print(f"  Cost: ${result.total_cost:.4f}")
+                print(f"  Cost: ${result.total_cost:.4f} (cumulative: ${self.total_cost_usd:.4f})")
+                print(f"  Tokens: {result.input_tokens} in / {result.output_tokens} out")
                 print(f"  Iterations: {result.iterations}")
                 print(f"  Output: {code_file}")
 
@@ -817,29 +838,49 @@ class PrimeContractorWorkflow:
         print(f"  Succeeded: {features_succeeded}")
         print(f"  Failed: {features_failed}")
         print(f"  Progress: {self.queue.get_progress():.1f}%")
-        
+        # Cost tracking summary (BLC-009)
+        print(f"  Total cost: ${self.total_cost_usd:.4f}")
+        print(f"  Total tokens: {self.total_input_tokens} in / {self.total_output_tokens} out")
+
         if features_failed > 0:
             print("\n⚠️  Some features failed. Review errors and re-run.")
         elif features_processed > 0:
             print("\n✓ All processed features integrated successfully!")
 
-        # Emit workflow completed insight (BLC-008)
+        # Emit workflow completed insight (BLC-008) with cost tracking (BLC-009)
         self.insight_emitter.emit(
             insight_type="workflow_completed",
-            summary=f"Workflow complete: {features_succeeded}/{features_processed} succeeded",
+            summary=f"Workflow complete: {features_succeeded}/{features_processed} succeeded, ${self.total_cost_usd:.4f}",
             confidence=1.0,
             processed=features_processed,
             succeeded=features_succeeded,
             failed=features_failed,
             progress=self.queue.get_progress(),
+            # Cost tracking attributes (BLC-009)
+            total_cost_usd=self.total_cost_usd,
+            total_input_tokens=self.total_input_tokens,
+            total_output_tokens=self.total_output_tokens,
         )
+
+        # Emit final cost tracking span (BLC-009)
+        with self.tracer.start_as_current_span("prime_contractor.workflow_cost") as span:
+            span.set_attribute("gen_ai.usage.input_tokens", self.total_input_tokens)
+            span.set_attribute("gen_ai.usage.output_tokens", self.total_output_tokens)
+            span.set_attribute("contextcore.cost.usd", self.total_cost_usd)
+            span.set_attribute("contextcore.features.processed", features_processed)
+            span.set_attribute("contextcore.features.succeeded", features_succeeded)
+            span.set_attribute("contextcore.features.failed", features_failed)
 
         return {
             "processed": features_processed,
             "succeeded": features_succeeded,
             "failed": features_failed,
             "progress": self.queue.get_progress(),
-            "history": self.integration_history
+            "history": self.integration_history,
+            # Cost tracking (BLC-009)
+            "total_cost_usd": self.total_cost_usd,
+            "total_input_tokens": self.total_input_tokens,
+            "total_output_tokens": self.total_output_tokens,
         }
     
     def run_single_feature(self, feature_id: str) -> bool:
