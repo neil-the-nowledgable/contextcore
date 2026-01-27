@@ -1,8 +1,19 @@
 # Merge Function Issues and Fixes
 
-## Problem Summary
+> **Status: RESOLVED** (2026-01-26) - AST-based merge implemented and deployed.
 
-The Lead Contractor's merge function corrupts files when multiple generated features target the same file. This was discovered when integrating the `Parts_*` features (parts_messagemodel, parts_partmodel, parts_artifactmodel), which all targeted `src/contextcore/agent/parts.py`.
+## Resolution Summary
+
+The text-based `merge_files_intelligently()` function has been replaced with an AST-based implementation that correctly handles Python file structure. The fix:
+
+- **New module**: `scripts/lead_contractor/ast_merge.py` (666 lines)
+- **Test suite**: `tests/test_ast_merge.py` (42 tests, all passing)
+- **Feature flag**: `CONTEXTCORE_AST_MERGE=false` to disable if needed
+- **Python compatibility**: Tested on Python 3.14 (uses `ast.Constant`, not deprecated `ast.Str`)
+
+## Original Problem Summary
+
+The Lead Contractor's merge function corrupted files when multiple generated features target the same file. This was discovered when integrating the `Parts_*` features (parts_messagemodel, parts_partmodel, parts_artifactmodel), which all targeted `src/contextcore/agent/parts.py`.
 
 ## What Happened
 
@@ -106,19 +117,25 @@ When merge fails, you'll see:
 
 5. **`__all__` mismatch** - exports don't match actual definitions
 
-## Current Workaround
+## Previous Workaround (No Longer Needed)
 
-Until fixed, avoid the merge function entirely:
+> **Note:** With the AST-based merge now in place, these workarounds are no longer necessary. They are preserved here for historical reference.
+
+~~Until fixed, avoid the merge function entirely:~~
 
 ```bash
+# These workarounds are OBSOLETE - AST merge handles these cases correctly now
+
 # 1. Don't run multiple features targeting the same file
-python3 scripts/prime_contractor/cli.py run --max-features 1
+# python3 scripts/prime_contractor/cli.py run --max-features 1
 
 # 2. If merge corrupted a file, restore it
-git checkout -- src/contextcore/agent/parts.py
+# git checkout -- src/contextcore/agent/parts.py
 
 # 3. Manually integrate features one at a time
 ```
+
+**Current approach:** Just run the Prime Contractor normally - AST merge handles multiple features targeting the same file correctly.
 
 ## Recommended Fix
 
@@ -364,6 +381,20 @@ class MergeResult:
 5. **TYPE_CHECKING Blocks** - Preserved separately from regular imports
 6. **Class Merging** - New methods added to existing classes with duplicate warnings
 7. **Syntax Validation** - Uses `ast.parse()` which catches syntax errors early
+
+### Python 3.14 Compatibility
+
+The implementation uses only `ast.Constant` (not the deprecated `ast.Str`, `ast.Num`, etc. which were removed in Python 3.14):
+
+```python
+# Correct (works on Python 3.9-3.14+)
+if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+    docstring = node.value.value
+
+# Wrong (breaks on Python 3.14)
+if isinstance(node.value, ast.Str):  # AttributeError: module 'ast' has no attribute 'Str'
+    docstring = node.value.s
+```
 
 ## Related Files
 

@@ -1,6 +1,17 @@
 # ContextCore Project Context
 # This file defines project metadata that Claude Code uses for context-aware assistance
-# Updated: 2026-01-21
+# Updated: 2026-01-26
+
+# =============================================================================
+# ENVIRONMENT QUICK REFERENCE
+# =============================================================================
+# Two environments exist until datasets are merged. Use password to identify:
+#
+#   DEV:  ~/Documents/dev/ContextCore    | password: admin
+#   TEST: ~/Documents/Deploy             | password: adminadminadmin
+#
+# Both target 'observability' namespace in 'o11y-dev' Kind cluster.
+# =============================================================================
 
 project:
   id: "contextcore"
@@ -15,6 +26,10 @@ project:
 status:
   phase: "Phase 4 - OTel GenAI Alignment"
   recentChanges:
+    - "Fixed parts.py/part.py module structure corruption from merge process"
+    - "Created docs/KNOWN_ISSUES.md troubleshooting guide for common problems"
+    - "Fixed multiple import errors in discovery/, generators/ modules"
+    - "Documented merge_files_intelligently() as broken (P1 risk) - needs AST rewrite"
     - "Added span-based generation contracts design for proactive LLM truncation prevention"
     - "Enhanced Prime Contractor with validate-before-integrate pattern (fail on truncation)"
     - "Added validate command to Prime Contractor CLI for pre-flight code validation"
@@ -31,6 +46,8 @@ status:
     - "Added Beaver (Amik) lead contractor progress dashboard"
     - "Established Dependency Manifest Pattern for tracking external dependencies"
   nextSteps:
+    - "Rewrite merge_files_intelligently() using Python AST for proper structure preservation"
+    - "Add pre-integration syntax validation to Prime Contractor"
     - "Implement span-based generation contracts in CodeGenerationHandoff class"
     - "Create Code Generation Health dashboard for truncation monitoring"
     - "Verify demo data appears in both Tempo and Loki"
@@ -131,21 +148,29 @@ business:
     - risk: "Multiple deployment sources target same namespace causing config drift"
       priority: P2
       mitigation: |
-        Consolidate to single source of truth for Kubernetes deployments:
-        1. Choose ONE directory as the canonical deployment source
-        2. Standardize credentials (passwords, tokens) across all configs
-        3. Keep dashboard JSON files in sync between sources
-        4. Add CI check that detects divergent deployments
-        5. Document which deployment source is authoritative
+        Two environments identified - keep separate until merge is complete:
+
+        DEV Environment:
+          - Path: /Users/neilyashinsky/Documents/dev/ContextCore
+          - Password: admin
+          - Purpose: Development, newer code
+
+        TEST Environment:
+          - Path: /Users/neilyashinsky/Documents/Deploy
+          - Password: adminadminadmin
+          - Purpose: Testing, stable deployments
+
+        Use password as identifier to know which environment you're connected to.
+        After merge: Consolidate to single source of truth.
       scope:
         - "k8s/observability/"
         - "/Users/neilyashinsky/Documents/Deploy/observability/"
       lesson: |
         Discovered two deployment directories targeting same Kind cluster namespace:
-        - ContextCore k8s (password: admin, older versions, 8 dashboards)
-        - Deploy directory (password: adminadminadmin, newer versions, 6 dashboards)
+        - DEV: ContextCore k8s (password: admin)
+        - TEST: Deploy directory (password: adminadminadmin)
         Both deploy to 'observability' namespace in 'o11y-dev' Kind cluster.
-        Result: Config drift, missing dashboards, authentication confusion.
+        Using different passwords as environment identifiers until merge.
       antipattern: "Parallel deployment sources with different configs targeting same target"
       pattern: |
         Single Source of Truth: One canonical deployment directory per target environment.
@@ -184,6 +209,100 @@ business:
       pattern: |
         After plugin rebuild, manually sync to Kind nodes:
         docker cp module.js o11y-dev-worker2:/plugins/contextcore/PLUGIN/module.js
+
+    - risk: "Prime Contractor merge_files_intelligently() corrupts Python files"
+      priority: P1
+      status: RESOLVED  # Fixed 2026-01-26
+      mitigation: |
+        **RESOLVED (2026-01-26)**: AST-based merge implemented in scripts/lead_contractor/ast_merge.py
+
+        The original text-based merge_files_intelligently() function has been replaced with an
+        AST-based implementation that correctly handles Python file structure:
+        - Decorators preserved with their classes (@dataclass stays attached)
+        - Classes topologically sorted by dependency (MessageRole before Message)
+        - Imports deduplicated with __future__ first
+        - TYPE_CHECKING blocks preserved separately
+        - 42 regression tests in tests/test_ast_merge.py
+
+        Feature flag for rollback: export CONTEXTCORE_AST_MERGE=false
+
+        Original problems (now fixed):
+        1. Imports scattered throughout file instead of at top
+        2. Class definitions mixed with example code
+        3. Decorators (@dataclass, @classmethod) separated from their targets
+        4. Code placed outside class bodies
+        5. Example code from generated files included at module level
+      scope:
+        - "scripts/lead_contractor/integrate_backlog.py"
+        - "src/contextcore/agent/parts.py"
+        - "src/contextcore/agent/part.py"
+      lesson: |
+        Discovered when "0/8 steps" workflow trigger failure traced to syntax errors in parts.py.
+        The merge process created "unterminated triple-quoted string literal" and other structural
+        corruption. MessageRole class was placed after Message class that referenced it.
+        @dataclass decorators were removed. Future imports were moved after other imports.
+
+        Session 2026-01-26: Implemented AST-based merge (scripts/lead_contractor/ast_merge.py)
+        that uses Python's ast module for proper structure preservation. Key insight: text-based
+        parsing cannot reliably handle decorators, multi-line strings, or class boundaries.
+      symptoms:
+        - "Workflow Trigger shows 0/N steps and completes in ~2 seconds"
+        - "SyntaxError: unterminated triple-quoted string literal"
+        - "SyntaxError: from __future__ imports must occur at the beginning"
+        - "NameError: name 'X' is not defined (class defined after its use)"
+        - "Missing @dataclass or @classmethod decorators"
+      antipattern: "String-based Python file merging without AST awareness"
+      pattern: |
+        AST-based merge workflow (now implemented):
+        1. Parse files with ast.parse() to get proper structure
+        2. Categorize: imports, classes, functions, constants
+        3. Topologically sort classes by dependency
+        4. Merge class definitions (add new methods, warn on duplicates)
+        5. Generate output with ast.unparse()
+
+        If issues occur, rollback with: export CONTEXTCORE_AST_MERGE=false
+      diagnostics: |
+        # Run AST merge tests
+        python3 -m pytest tests/test_ast_merge.py -v
+
+        # Check for syntax errors
+        python3 -m py_compile src/contextcore/agent/parts.py
+
+        # Test imports
+        python3 -c "from contextcore.agent.parts import Message, MessageRole"
+      documentation: "docs/MERGE_FUNCTION_ISSUES.md"
+
+    - risk: "Generated code contains unguarded example code at module level"
+      priority: P2
+      mitigation: |
+        Generated Python files often include example/demo code at module level that
+        executes during import, causing failures like:
+        - TypeError: missing required positional arguments (incomplete example instantiation)
+        - ImportError: circular imports triggered by example code
+        - Runtime errors from example code assumptions
+
+        Prevention:
+        - Generated files should use `if __name__ == "__main__":` guards for examples
+        - Remove example code sections before integration
+        - Rename non-module files to .example extension
+      scope:
+        - "src/contextcore/discovery/endpoint.py"
+        - "src/contextcore/compat/docs_unifiedupdate.py"
+        - "generated/**/*_code.py"
+      lesson: |
+        Discovered when endpoint.py import failed with "AgentCard.__init__() missing 3 required
+        positional arguments". The generated file had example code at module level that ran during
+        import. Fixed by removing the example code section (lines 193-214).
+      symptoms:
+        - "TypeError: X.__init__() missing N required positional arguments"
+        - "Import fails with runtime error, not syntax error"
+        - "Module works when executed directly but fails when imported"
+      antipattern: "Unguarded example code in module-level scope"
+      pattern: |
+        Either remove example code or guard with:
+        if __name__ == "__main__":
+            # Example code here
+      documentation: "docs/KNOWN_ISSUES.md"
 
 requirements:
   availability: "99.9%"
