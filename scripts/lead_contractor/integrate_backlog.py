@@ -443,29 +443,107 @@ def merge_files_intelligently(
     source_files: List[Dict]
 ) -> str:
     """
-    Intelligently merge multiple Python files.
-    
+    Intelligently merge multiple Python files using AST parsing.
+
+    This function uses Python's ast module for robust parsing that correctly
+    handles decorators, multi-line strings, and class dependencies.
+
     Strategy:
-    1. Collect all imports (deduplicate)
-    2. Collect all classes (preserve all)
-    3. Collect all functions (preserve all)
-    4. Combine docstrings (use first non-empty)
-    5. Generate __all__ list
+    1. Parse each file into AST
+    2. Collect all imports (deduplicate, __future__ first)
+    3. Collect all classes (topologically sorted by dependencies)
+    4. Collect all functions
+    5. Combine docstrings (use first non-empty)
+    6. Generate __all__ list
+
+    Falls back to legacy text-based merge if AST parsing fails.
+    """
+    import os
+
+    # Feature flag for safe rollout - can disable AST merge if issues found
+    use_ast_merge = os.environ.get('CONTEXTCORE_AST_MERGE', 'true').lower() == 'true'
+
+    if not use_ast_merge:
+        return _merge_files_legacy(target_path, source_files)
+
+    try:
+        from scripts.lead_contractor.ast_merge import (
+            parse_python_file,
+            merge_parsed_files,
+        )
+
+        parsed_files = []
+
+        # Include existing target first (so its content takes precedence)
+        if target_path.exists():
+            try:
+                existing = parse_python_file(target_path)
+                parsed_files.append(existing)
+            except SyntaxError as e:
+                print(f"  Warning: Target {target_path.name} has syntax error: {e}")
+
+        # Parse source files
+        for src in source_files:
+            src_path = Path(src['source'])
+            if not src_path.exists():
+                continue
+            try:
+                parsed = parse_python_file(src_path)
+                parsed_files.append(parsed)
+            except SyntaxError as e:
+                print(f"  Warning: Skipping {src_path.name} due to syntax error: {e}")
+                continue
+
+        if not parsed_files:
+            return ""
+
+        result = merge_parsed_files(parsed_files)
+
+        # Print warnings from merge
+        for warning in result.warnings:
+            print(f"  Warning: {warning}")
+
+        if result.classes_merged:
+            print(f"  Merged classes: {', '.join(result.classes_merged)}")
+
+        return result.content
+
+    except ImportError as e:
+        print(f"  Warning: AST merge module not available ({e}), using legacy merge")
+        return _merge_files_legacy(target_path, source_files)
+    except Exception as e:
+        print(f"  Warning: AST merge failed ({e}), falling back to legacy merge")
+        return _merge_files_legacy(target_path, source_files)
+
+
+def _merge_files_legacy(
+    target_path: Path,
+    source_files: List[Dict]
+) -> str:
+    """
+    Legacy text-based merge (preserved for fallback).
+
+    WARNING: This function can corrupt Python files by:
+    - Separating decorators from their classes
+    - Breaking multi-line strings
+    - Incorrectly identifying class boundaries
+
+    Use only as fallback when AST merge is unavailable.
     """
     imports = set()
     classes = {}
     functions = {}
     docstring = None
     module_level_code = []
-    
+
     for src in source_files:
         src_path = Path(src['source'])
         if not src_path.exists():
             continue
-        
+
         with open(src_path, 'r', encoding='utf-8') as f:
             content = clean_markdown_code_blocks(f.read())
-        
+
         # Parse file (simplified - would need AST parsing for production)
         lines = content.split('\n')
         in_class = None
@@ -475,15 +553,15 @@ def merge_files_intelligently(
         in_docstring = False
         docstring_lines = []
         indent_level = 0
-        
+
         for i, line in enumerate(lines):
             stripped = line.strip()
             current_indent = len(line) - len(line.lstrip())
-            
+
             # Collect imports
             if stripped.startswith('import ') or stripped.startswith('from '):
                 imports.add(stripped)
-            
+
             # Collect docstring
             elif not docstring and stripped.startswith('"""'):
                 if stripped.count('"""') == 2:
@@ -493,13 +571,13 @@ def merge_files_intelligently(
                     # Multi-line docstring
                     in_docstring = True
                     docstring_lines = [line]
-            
+
             elif in_docstring:
                 docstring_lines.append(line)
                 if '"""' in stripped:
                     docstring = '\n'.join(docstring_lines)
                     in_docstring = False
-            
+
             # Collect classes
             elif stripped.startswith('class '):
                 if in_class:
@@ -508,12 +586,12 @@ def merge_files_intelligently(
                     functions[in_function] = '\n'.join(function_lines)
                     in_function = None
                     function_lines = []
-                
+
                 class_name = stripped.split('(')[0].split(':')[0].replace('class ', '').strip()
                 in_class = class_name
                 class_lines = [line]
                 indent_level = current_indent
-            
+
             # Collect functions (only at module level)
             elif stripped.startswith('def ') and not in_class:
                 if in_function:
@@ -522,7 +600,7 @@ def merge_files_intelligently(
                 in_function = func_name
                 function_lines = [line]
                 indent_level = current_indent
-            
+
             # Continue collecting class/function content
             elif in_class:
                 if stripped and not stripped.startswith('#') and current_indent <= indent_level:
@@ -532,7 +610,7 @@ def merge_files_intelligently(
                     class_lines = []
                 else:
                     class_lines.append(line)
-            
+
             elif in_function:
                 if stripped and not stripped.startswith('#') and current_indent <= indent_level:
                     # End of function
@@ -541,56 +619,56 @@ def merge_files_intelligently(
                     function_lines = []
                 else:
                     function_lines.append(line)
-            
+
             else:
                 # Module-level code (not in class/function)
                 if stripped and not stripped.startswith('#') and not stripped.startswith('@'):
                     # Check if it's not an import or docstring
-                    if not (stripped.startswith('import ') or stripped.startswith('from ') or 
+                    if not (stripped.startswith('import ') or stripped.startswith('from ') or
                             stripped.startswith('"""') or stripped.startswith("'''")):
                         module_level_code.append(line)
-        
+
         # Save last class/function
         if in_class:
             classes[in_class] = '\n'.join(class_lines)
         if in_function:
             functions[in_function] = '\n'.join(function_lines)
-    
+
     # Build merged content
     result = []
-    
+
     # Docstring
     if docstring:
         result.append(docstring)
         result.append('')
-    
+
     # Imports (sorted)
     sorted_imports = sorted(imports)
     for imp in sorted_imports:
         result.append(imp)
     if sorted_imports:
         result.append('')
-    
+
     # Module-level code
     if module_level_code:
         result.extend(module_level_code)
         result.append('')
-    
+
     # Classes (sorted by name)
     for class_name, class_content in sorted(classes.items()):
         result.append(class_content)
         result.append('')
-    
+
     # Functions (sorted by name)
     for func_name, func_content in sorted(functions.items()):
         result.append(func_content)
         result.append('')
-    
+
     # __all__ export
     all_exports = sorted(set(list(classes.keys()) + list(functions.keys())))
     if all_exports:
         result.append(f"__all__ = {all_exports}")
-    
+
     return '\n'.join(result)
 
 
