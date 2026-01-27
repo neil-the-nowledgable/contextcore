@@ -557,6 +557,193 @@
         "content": "### Run Workflows via CLI\n\nIf the workflow panel is not available, use the CLI:\n\n```bash\n# Dry run (preview without executing)\ncontextcore workflow run --project ${project} --dry-run\n\n# Execute workflow\ncontextcore workflow run --project ${project}\n\n# Check workflow status\ncontextcore workflow status --id <workflow-id>\n```\n\n### Plugin Installation\n\nTo enable the workflow trigger panel:\n\n```bash\ncd contextcore-owl\nnpm install && npm run build\ndocker compose restart grafana\n```",
         "mode": "markdown"
       }
+    },
+    {
+      "type": "row",
+      "title": "Workflow History",
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "id": 103,
+      "collapsed": false
+    },
+    {
+      "id": 17,
+      "title": "Lead Contractor Workflow History - ${project}",
+      "description": "Completed workflow runs with duration, cost, and outcome",
+      "type": "table",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "datasource": {
+        "type": "tempo",
+        "uid": "tempo"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "basic"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "ok": {
+                        "color": "green",
+                        "text": "SUCCESS"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "error": {
+                        "color": "red",
+                        "text": "FAILED"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "unset": {
+                        "color": "blue",
+                        "text": "RUNNING"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cost ($)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "currencyUSD"
+              },
+              {
+                "id": "decimals",
+                "value": 4
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View in Tempo",
+                    "url": "/explore?orgId=1&left=%7B%22datasource%22:%22tempo%22,%22queries%22:%5B%7B%22queryType%22:%22traceql%22,%22query%22:%22${__value.raw}%22%7D%5D%7D"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "displayName": "Start Time",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "renameByName": {
+              "traceID": "Trace ID",
+              "span.workflow.run_id": "Run ID",
+              "span.task.title": "Feature",
+              "span.workflow.features_processed": "Features",
+              "span.workflow.features_succeeded": "Succeeded",
+              "span.workflow.features_failed": "Failed",
+              "duration": "Duration",
+              "span.contextcore.cost.usd": "Cost ($)",
+              "status": "Status",
+              "startTime": "Start Time"
+            },
+            "excludeByName": {},
+            "indexByName": {
+              "Start Time": 0,
+              "Run ID": 1,
+              "Feature": 2,
+              "Features": 3,
+              "Succeeded": 4,
+              "Failed": 5,
+              "Duration": 6,
+              "Cost ($)": 7,
+              "Status": 8,
+              "Trace ID": 9
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "tempo"
+          },
+          "queryType": "traceql",
+          "query": "{resource.service.name=\"lead-contractor\" && name=\"workflow\" && resource.project.id=\"$project\"} | select(span.workflow.run_id, span.task.title, span.workflow.features_processed, span.workflow.features_succeeded, span.workflow.features_failed, duration, span.contextcore.cost.usd, status)",
+          "limit": 20,
+          "refId": "A"
+        }
+      ]
     }
   ]
 }
