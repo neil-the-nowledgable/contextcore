@@ -4,7 +4,8 @@
 Add a Grafana panel to display active workflow progress with current phase, iteration count, and elapsed time.
 
 ## Target Files
-- `grafana/provisioning/dashboards/rabbit/workflow.json` (modify)
+- `grafana/provisioning/dashboards/core/workflow.json` (modify)
+- `k8s/observability/dashboards/workflow.json` (source of truth)
 
 ## Requirements
 

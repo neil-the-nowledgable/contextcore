@@ -4,7 +4,8 @@
 Add a Grafana table panel to display completed workflow runs with task details, duration, cost, and outcome.
 
 ## Target Files
-- `grafana/provisioning/dashboards/rabbit/workflow.json` (modify)
+- `grafana/provisioning/dashboards/core/workflow.json` (modify)
+- `k8s/observability/dashboards/workflow.json` (source of truth)
 
 ## Requirements
 
