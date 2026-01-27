@@ -51,11 +51,11 @@ def _calculate_cost(self, usage, model):
 ```
 
 ## Acceptance Criteria
-- [ ] Token counts recorded as span attributes
-- [ ] Cost calculated per generation
-- [ ] Model name recorded
-- [ ] Metrics visible in Grafana dashboard
-- [ ] Cumulative cost per workflow run
+- [x] Token counts recorded as span attributes
+- [x] Cost calculated per generation
+- [x] Model name recorded
+- [ ] Metrics visible in Grafana dashboard (requires OTel setup)
+- [x] Cumulative cost per workflow run
 
 ## Dependencies
 - OpenTelemetry tracer

@@ -185,17 +185,22 @@ Insights appear in Tempo with:
 
 ---
 
-### Test 6: Cost Tracking (BLC-009) - Currently Not Implemented
+### Test 6: Cost Tracking (BLC-009) - Implemented
 
-#### Expected Behavior (when implemented)
-Span attributes should include:
-- `gen_ai.usage.input_tokens`
-- `gen_ai.usage.output_tokens`
-- `gen_ai.request.model`
-- `contextcore.cost.usd`
+#### Expected Behavior
+Span attributes include:
+- `gen_ai.usage.input_tokens` - Input token count
+- `gen_ai.usage.output_tokens` - Output token count
+- `gen_ai.request.model` - Model used for generation
+- `contextcore.cost.usd` - Cost per feature
+- `contextcore.cost.cumulative_usd` - Running total cost
+
+#### Implementation Details
+- `scripts/lead_contractor/runner.py` - Emits per-feature cost spans
+- `scripts/prime_contractor/workflow.py` - Tracks cumulative costs, emits workflow cost span
 
 #### Current Status
-⚠️ BLC-009 not yet implemented - cost attributes won't appear until tracking is added.
+✅ BLC-009 implemented - Cost tracking spans emitted for each feature and workflow total
 
 ---
 
@@ -253,7 +258,7 @@ echo -e "\n=== API Tests Complete ==="
 | 3.x | BLC-005 Status panels | ✅ Implemented, pending manual test |
 | 4.x | BLC-007 Tempo traces | ⚠️ Requires OpenTelemetry setup |
 | 5.x | BLC-008 Insights | ✅ Implemented 2026-01-27 |
-| 6.x | BLC-009 Cost tracking | ⬜ (not implemented) |
+| 6.x | BLC-009 Cost tracking | ✅ Implemented 2026-01-27 |
 
 ---
 
@@ -261,7 +266,7 @@ echo -e "\n=== API Tests Complete ==="
 
 1. **BLC-006 (History Panel)** - ✅ Implemented
 2. **BLC-008 (Insight Emission)** - ✅ Implemented (InsightEmitter integrated into workflow.py)
-3. **BLC-009 (Cost Tracking)** - Token/cost attributes not being emitted
+3. **BLC-009 (Cost Tracking)** - ✅ Implemented (cost/token tracking in runner.py and workflow.py)
 4. **Prime Contractor dependencies** - Requires `scripts/prime_contractor/` to be functional
 
 ## Next Steps After Testing
