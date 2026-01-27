@@ -251,13 +251,16 @@ Each feature targets its own file, eliminating merge conflicts.
 
 ### Phase 1: Immediate (Workaround)
 - [x] Document the issue (this file)
-- [ ] Add warning when multiple features target same file
-- [ ] Block automatic merge for high-risk files (parts.py, handoff.py)
+- [x] Add warning when multiple features target same file
+- [x] Block automatic merge for high-risk files (parts.py, handoff.py)
 
-### Phase 2: Short-term (AST Merge)
-- [ ] Implement `merge_python_files_ast()`
-- [ ] Add unit tests with known merge scenarios
-- [ ] Replace `merge_parts_files()` with AST version
+### Phase 2: Short-term (AST Merge) - COMPLETED (2026-01-26)
+- [x] Implement `merge_python_files_ast()` - See `scripts/lead_contractor/ast_merge.py`
+- [x] Add unit tests with known merge scenarios - See `tests/test_ast_merge.py` (42 tests)
+- [x] Replace `merge_parts_files()` with AST version
+- [x] Replace `merge_files_intelligently()` with AST version
+- [x] Add feature flag for safe rollout (`CONTEXTCORE_AST_MERGE` env var)
+- [x] Preserve legacy merge as fallback (`_merge_files_legacy()`)
 
 ### Phase 3: Long-term (Architecture)
 - [ ] Evaluate file-per-feature restructure
@@ -266,7 +269,19 @@ Each feature targets its own file, eliminating merge conflicts.
 
 ## Testing the Fix
 
-After implementing AST-based merge:
+### Running the Test Suite
+
+```bash
+# Run all AST merge tests (42 tests)
+python3 -m pytest tests/test_ast_merge.py -v
+
+# Run specific test categories
+python3 -m pytest tests/test_ast_merge.py::TestParseFile -v
+python3 -m pytest tests/test_ast_merge.py::TestClassMerging -v
+python3 -m pytest tests/test_ast_merge.py::TestRegressionCases -v
+```
+
+### Manual Testing
 
 ```bash
 # Test case: merge two files with same class
@@ -284,17 +299,79 @@ echo 'class Foo:
 #     def method_b(self): pass
 
 python3 -c "
-from scripts.lead_contractor.merge_conflicts import merge_python_files_ast
-result = merge_python_files_ast(['/tmp/a.py', '/tmp/b.py'])
-print(result)
+from scripts.lead_contractor.ast_merge import merge_python_files
+from pathlib import Path
+result = merge_python_files(Path('/tmp/merged.py'), [Path('/tmp/a.py'), Path('/tmp/b.py')])
+print(result.content)
+print('Warnings:', result.warnings)
 "
 ```
 
+### Disabling AST Merge (Rollback)
+
+If issues are found with the AST merge, you can disable it:
+
+```bash
+# Disable AST merge, fall back to legacy text-based merge
+export CONTEXTCORE_AST_MERGE=false
+python3 scripts/prime_contractor/cli.py run --import-backlog
+```
+
+## Current Implementation (AST-Based)
+
+The AST-based merge is now the default in `scripts/lead_contractor/ast_merge.py`. Key features:
+
+### Core Functions
+
+- **`parse_python_file()`** - Parse a Python file into categorized components
+- **`merge_parsed_files()`** - Merge multiple parsed files into one
+- **`merge_class_definitions()`** - Merge two class definitions, combining methods
+- **`deduplicate_imports()`** - Merge and deduplicate imports
+- **`topological_sort_classes()`** - Sort classes by dependency order
+- **`detect_class_dependencies()`** - Find class dependencies for ordering
+
+### Data Structures
+
+```python
+@dataclass
+class ParsedPythonFile:
+    """Represents a parsed Python file with categorized components."""
+    module_docstring: Optional[str]
+    future_imports: List[ast.ImportFrom]
+    regular_imports: List[Union[ast.Import, ast.ImportFrom]]
+    type_checking_imports: List[ast.stmt]
+    classes: Dict[str, ast.ClassDef]
+    functions: Dict[str, ast.FunctionDef]
+    constants: List[ast.Assign]
+    all_export: Optional[List[str]]
+
+@dataclass
+class MergeResult:
+    """Result of merging Python files."""
+    content: str
+    warnings: List[str]
+    classes_merged: List[str]
+    functions_merged: List[str]
+    imports_deduplicated: int
+```
+
+### Key Improvements Over Legacy
+
+1. **Decorator Preservation** - `@dataclass`, `@classmethod` stay attached to their targets
+2. **Dependency Ordering** - Classes sorted topologically so `MessageRole` comes before `Message`
+3. **Import Deduplication** - Merges `from X import a` and `from X import b` into `from X import a, b`
+4. **`__future__` First** - Future imports always at the top
+5. **TYPE_CHECKING Blocks** - Preserved separately from regular imports
+6. **Class Merging** - New methods added to existing classes with duplicate warnings
+7. **Syntax Validation** - Uses `ast.parse()` which catches syntax errors early
+
 ## Related Files
 
-- `scripts/lead_contractor/merge_conflicts.py` - Current merge implementation
+- `scripts/lead_contractor/ast_merge.py` - **NEW**: AST-based merge implementation
+- `scripts/lead_contractor/merge_conflicts.py` - Specialized merge functions (now use AST)
 - `scripts/lead_contractor/integrate_backlog.py` - Integration workflow
 - `scripts/prime_contractor/workflow.py` - Prime Contractor orchestration
+- `tests/test_ast_merge.py` - **NEW**: Comprehensive test suite (42 tests)
 
 ## References
 
