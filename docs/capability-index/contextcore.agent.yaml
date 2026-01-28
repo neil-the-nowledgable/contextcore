@@ -1,0 +1,626 @@
+# ContextCore Agent Capability Index
+# Version: 1.0.0
+# Created: 2026-01-28
+# Audience: AI Agents (primary), Developers (secondary)
+
+manifest_id: contextcore.agent
+name: ContextCore Agent Capabilities
+version: "1.0.0"
+description: |
+  Agent-focused capabilities for ContextCore SDK.
+  Tasks as OTel spans, insights as knowledge, handoffs as coordination.
+
+owner: neilyashinsky
+repository: https://github.com/neilyashinsky/ContextCore
+
+labels:
+  domain: observability
+  tier: sdk
+  audience: agent
+
+# Token estimates for LLM context management
+manifest_tokens: 400
+index_tokens: 2500
+
+capabilities:
+  # ============================================================================
+  # INSIGHT CAPABILITIES (Stable)
+  # ============================================================================
+
+  - capability_id: contextcore.insight.emit
+    category: action
+    maturity: stable
+    summary: Emit agent-generated insights as OTel spans for cross-agent collaboration
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Emit insight span. In: {type: enum[analysis|decision|blocker|discovery|lesson|risk|progress], summary: string, confidence: float[0-1], audience: enum[agent|human|both], rationale?: string, evidence?: Evidence[], applies_to?: string[], category?: string}. Out: Insight with trace_id. Span stored in Tempo, queryable via TraceQL.
+      human: |
+        Persists agent-generated knowledge as OpenTelemetry spans in Tempo. Supports
+        multiple insight types (decisions, blockers, lessons, etc.) with confidence
+        scoring and evidence linking. Insights are queryable by other agents and
+        visible in Grafana dashboards. Supports file-path scoping via `applies_to`
+        for context-specific lessons.
+
+    triggers:
+      - "emit insight"
+      - "record decision"
+      - "log blocker"
+      - "save lesson"
+      - "agent knowledge"
+
+    inputs:
+      type: object
+      required: [insight_type, summary, confidence]
+      properties:
+        insight_type:
+          type: string
+          enum: [analysis, recommendation, decision, question, blocker, discovery, risk, progress, lesson]
+        summary:
+          type: string
+          description: Brief description of the insight
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        audience:
+          type: string
+          enum: [agent, human, both]
+          default: both
+        rationale:
+          type: string
+          description: Explanation supporting the insight
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              ref: { type: string }
+              description: { type: string }
+        applies_to:
+          type: array
+          items: { type: string }
+          description: File paths or patterns this insight applies to
+        category:
+          type: string
+          description: Categorization for lessons (e.g., testing, architecture)
+
+    outputs:
+      type: object
+      properties:
+        id: { type: string }
+        trace_id: { type: string }
+        timestamp: { type: string, format: datetime }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/insights.py
+        description: InsightEmitter class with emit() method (lines 85-200)
+      - type: code
+        ref: src/contextcore/agent/insights.py
+        description: InsightType enum defining all insight categories (lines 33-43)
+      - type: test
+        ref: tests/agent/test_insights.py
+        description: Unit tests for insight emission
+
+    confidence: 0.95
+
+    anti_patterns:
+      - "Never emit insights without confidence scores—they're required for prioritization"
+      - "Don't use audience=agent for blockers humans need to see"
+
+    traceql_examples:
+      - query: '{ span.insight.type = "decision" && span.insight.confidence > 0.8 }'
+        description: Find high-confidence decisions
+      - query: '{ span.insight.type = "blocker" && resource.project.id = "myproject" }'
+        description: Find blockers for a specific project
+
+  - capability_id: contextcore.insight.query
+    category: query
+    maturity: stable
+    summary: Query prior insights from Tempo by project, type, confidence, or file path
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Query insights from Tempo. In: {project_id: string, insight_type?: enum, min_confidence?: float, time_range?: string, applies_to?: string, limit?: int}. Out: Insight[]. Uses TraceQL internally. get_blockers() returns unresolved blockers.
+      human: |
+        Retrieves previously emitted insights from Tempo using TraceQL queries.
+        Supports filtering by project, insight type, confidence threshold, time
+        range, and file path scope. The `get_blockers()` method specifically
+        retrieves unresolved blocker insights for a project.
+
+    triggers:
+      - "query insights"
+      - "get decisions"
+      - "find blockers"
+      - "search lessons"
+      - "prior knowledge"
+
+    inputs:
+      type: object
+      required: [project_id]
+      properties:
+        project_id:
+          type: string
+        insight_type:
+          type: string
+          enum: [analysis, recommendation, decision, question, blocker, discovery, risk, progress, lesson]
+        min_confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        time_range:
+          type: string
+          description: Duration string (e.g., "24h", "7d")
+        applies_to:
+          type: string
+          description: Filter by file path or pattern
+        limit:
+          type: integer
+          default: 50
+
+    outputs:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          type: { type: string }
+          summary: { type: string }
+          confidence: { type: number }
+          timestamp: { type: string }
+          evidence: { type: array }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/insights.py
+        description: InsightQuerier class with query() method (lines 397-876)
+      - type: code
+        ref: src/contextcore/agent/insights.py
+        description: get_blockers() method for unresolved blockers (lines 878-883)
+      - type: test
+        ref: tests/agent/test_insights.py
+        description: Query tests with various filters
+
+    confidence: 0.9
+
+    traceql_examples:
+      - query: '{ span.insight.type = "lesson" && span.insight.applies_to =~ ".*test.*" }'
+        description: Find lessons about testing
+      - query: '{ span.insight.confidence >= 0.9 } | select(span.insight.summary)'
+        description: Get summaries of high-confidence insights
+
+  # ============================================================================
+  # HANDOFF CAPABILITIES (Experimental)
+  # ============================================================================
+
+  - capability_id: contextcore.handoff.initiate
+    category: action
+    maturity: beta
+    summary: Start agent-to-agent task delegation with size constraints and expected output
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Create handoff to another agent. In: {to_agent: string, capability_id: string, task: string, inputs: object, expected_output: {type: string, fields: string[], max_lines?: int, max_tokens?: int, completeness_markers?: string[]}, priority?: enum[critical|high|normal|low], timeout_ms?: int}. Out: HandoffResult with status, result_trace_id. Stored in K8s CRD or file storage.
+      human: |
+        Initiates structured task delegation between agents. The requesting agent
+        specifies what capability is needed, inputs, and expected output format
+        including size constraints (max_lines, max_tokens). Supports priority levels
+        and timeout configuration. Uses pluggable storage (K8s CRD or file-based).
+
+    triggers:
+      - "handoff to"
+      - "delegate task"
+      - "agent coordination"
+      - "request capability"
+
+    inputs:
+      type: object
+      required: [to_agent, capability_id, task, inputs, expected_output]
+      properties:
+        to_agent:
+          type: string
+          description: Target agent identifier
+        capability_id:
+          type: string
+          description: Capability being requested (e.g., "investigate_error")
+        task:
+          type: string
+          description: Task description
+        inputs:
+          type: object
+          description: Input data for the task
+        expected_output:
+          type: object
+          required: [type, fields]
+          properties:
+            type: { type: string }
+            fields: { type: array, items: { type: string } }
+            max_lines: { type: integer }
+            max_tokens: { type: integer }
+            completeness_markers: { type: array, items: { type: string } }
+        priority:
+          type: string
+          enum: [critical, high, normal, low]
+          default: normal
+        timeout_ms:
+          type: integer
+          default: 300000
+
+    outputs:
+      type: object
+      properties:
+        handoff_id: { type: string }
+        status: { type: string, enum: [pending, accepted, in_progress, completed, failed, timeout] }
+        result_trace_id: { type: string }
+        error_message: { type: string }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/handoff.py
+        description: HandoffManager class with create_and_await() method (lines 119-350)
+      - type: code
+        ref: src/contextcore/agent/handoff.py
+        description: ExpectedOutput dataclass with size constraints (lines 65-89)
+      - type: test
+        ref: tests/agent/test_handoff.py
+        description: Handoff lifecycle tests
+
+    confidence: 0.85
+
+    risk_flags:
+      - "risk:k8s-restart-loses-in-flight"
+
+    anti_patterns:
+      - "Don't set max_lines > 150 for LLM-generated code—truncation risk"
+      - "Always specify completeness_markers for code generation"
+
+  - capability_id: contextcore.handoff.receive
+    category: action
+    maturity: beta
+    summary: Poll for and process incoming handoffs as receiving agent
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Poll pending handoffs. In: {project_id: string, poll_interval_s?: float, timeout_s?: float}. Yields: Handoff. Call complete(handoff_id, result_trace_id) or fail(handoff_id, error). Supports graceful shutdown.
+      human: |
+        Enables agents to receive and process delegated tasks from other agents.
+        Uses polling pattern with configurable interval. Receiving agent must
+        call complete() or fail() to update handoff status. Supports graceful
+        shutdown via context manager or shutdown() method.
+
+    triggers:
+      - "receive handoff"
+      - "poll for tasks"
+      - "accept delegation"
+      - "process handoff"
+
+    inputs:
+      type: object
+      required: [project_id]
+      properties:
+        project_id:
+          type: string
+        poll_interval_s:
+          type: number
+          default: 1.0
+        timeout_s:
+          type: number
+          description: Max time to poll before returning
+
+    outputs:
+      type: object
+      description: Handoff object when available
+      properties:
+        id: { type: string }
+        from_agent: { type: string }
+        to_agent: { type: string }
+        capability_id: { type: string }
+        task: { type: string }
+        inputs: { type: object }
+        expected_output: { type: object }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/handoff.py
+        description: HandoffReceiver class with poll_handoffs() method (lines 353-470)
+
+    confidence: 0.8
+
+  # ============================================================================
+  # GUIDANCE CAPABILITIES (Experimental)
+  # ============================================================================
+
+  - capability_id: contextcore.guidance.read_constraints
+    category: query
+    maturity: beta
+    summary: Read human-defined constraints from ProjectContext CRD
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Get constraints. In: {project_id: string, path?: string}. Out: Constraint[] with {id, rule, scope, severity: enum[blocking|warning|advisory], reason}. Use get_constraints_for_path() to filter by file. BLOCKING constraints must be obeyed.
+      human: |
+        Retrieves human-defined constraints from the ProjectContext Kubernetes CRD.
+        Constraints define what agents must NOT do, with severity levels (blocking,
+        warning, advisory). The `get_constraints_for_path()` method filters constraints
+        relevant to a specific file path or scope pattern.
+
+    triggers:
+      - "read constraints"
+      - "check rules"
+      - "human guidance"
+      - "project constraints"
+
+    inputs:
+      type: object
+      required: [project_id]
+      properties:
+        project_id:
+          type: string
+        path:
+          type: string
+          description: Optional file path to filter constraints
+
+    outputs:
+      type: array
+      items:
+        type: object
+        properties:
+          id: { type: string }
+          rule: { type: string }
+          scope: { type: string }
+          severity: { type: string, enum: [blocking, warning, advisory] }
+          reason: { type: string }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/guidance.py
+        description: GuidanceReader class with get_constraints_for_path() (lines 96-280)
+      - type: code
+        ref: src/contextcore/agent/guidance.py
+        description: Constraint dataclass with severity enum (lines 51-57)
+
+    confidence: 0.85
+
+    anti_patterns:
+      - "Never ignore BLOCKING constraints—they are mandatory"
+
+  - capability_id: contextcore.guidance.answer_question
+    category: action
+    maturity: beta
+    summary: Answer open questions from humans with confidence and evidence
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Answer question. In: {question_id: string, answer: string, confidence: float[0-1], evidence?: Evidence[]}. Updates question status to "answered" in ProjectContext CRD. Also emits insight span for persistence.
+      human: |
+        Enables agents to answer questions posed by humans in the ProjectContext CRD.
+        Updates the question status to "answered" and emits an insight span containing
+        the answer with confidence and evidence. This creates a persistent, queryable
+        record of agent answers.
+
+    triggers:
+      - "answer question"
+      - "respond to human"
+      - "provide answer"
+
+    inputs:
+      type: object
+      required: [question_id, answer, confidence]
+      properties:
+        question_id:
+          type: string
+        answer:
+          type: string
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        evidence:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              ref: { type: string }
+
+    outputs:
+      type: object
+      properties:
+        success: { type: boolean }
+        insight_id: { type: string }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/guidance.py
+        description: GuidanceResponder.answer_question() method (lines 310-426)
+
+    confidence: 0.85
+
+  # ============================================================================
+  # CODE GENERATION CAPABILITIES (Experimental)
+  # ============================================================================
+
+  - capability_id: contextcore.code_generation.contract
+    category: action
+    maturity: beta
+    summary: Define code generation contracts with size limits and completeness markers
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Request code generation with contract. In: {to_agent: string, spec: {target_file: string, description: string, max_lines: int=150, max_tokens?: int, required_exports: string[], context_files?: string[], allows_decomposition: bool=true}}. Pre-flight validation estimates size. If estimate > limit, decomposition negotiated via span events.
+      human: |
+        Specialized handoff for code generation with proactive truncation prevention.
+        The requesting agent specifies size constraints (max_lines, max_tokens) and
+        required exports. The receiving agent estimates output size BEFORE generation
+        and triggers decomposition if limits would be exceeded. All decisions are
+        recorded as OTel spans.
+
+    triggers:
+      - "generate code"
+      - "code contract"
+      - "size-limited generation"
+      - "truncation prevention"
+
+    inputs:
+      type: object
+      required: [to_agent, spec]
+      properties:
+        to_agent:
+          type: string
+        spec:
+          type: object
+          required: [target_file, description]
+          properties:
+            target_file: { type: string }
+            description: { type: string }
+            max_lines: { type: integer, default: 150 }
+            max_tokens: { type: integer }
+            required_exports: { type: array, items: { type: string } }
+            context_files: { type: array, items: { type: string } }
+            allows_decomposition: { type: boolean, default: true }
+
+    outputs:
+      type: object
+      properties:
+        result: { type: string, enum: [generated, decomposed, rejected] }
+        trace_id: { type: string }
+        chunks: { type: array, items: { type: string } }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/code_generation.py
+        description: CodeGenerationHandoff class with request_code() (lines 1-100)
+      - type: code
+        ref: src/contextcore/agent/code_generation.py
+        description: CodeGenerationSpec dataclass (lines 77-100)
+
+    confidence: 0.8
+
+    anti_patterns:
+      - "Never skip size estimation—truncated code is worse than no code"
+      - "Always specify required_exports for verification"
+
+  - capability_id: contextcore.size_estimation.estimate
+    category: query
+    maturity: beta
+    summary: Estimate code output size before generation using heuristics
+
+    audiences: [agent, human]
+
+    description:
+      agent: |
+        Estimate output size. In: {task: string, inputs?: {required_exports?: string[], context_files?: string[]}}. Out: {lines: int, tokens: int, complexity: enum[low|medium|high], confidence: float, reasoning: string}. Uses keyword patterns and construct detection.
+      human: |
+        Provides heuristics-based estimation of code output size before generation.
+        Analyzes task description for complexity keywords and counts expected
+        constructs (classes, methods, functions). Returns line/token estimates
+        with confidence scoring. Used by code_generation.contract for pre-flight
+        validation.
+
+    triggers:
+      - "estimate size"
+      - "predict lines"
+      - "output size"
+      - "before generation"
+
+    inputs:
+      type: object
+      required: [task]
+      properties:
+        task:
+          type: string
+          description: Task description to analyze
+        inputs:
+          type: object
+          properties:
+            required_exports: { type: array, items: { type: string } }
+            context_files: { type: array, items: { type: string } }
+
+    outputs:
+      type: object
+      properties:
+        lines: { type: integer }
+        tokens: { type: integer }
+        complexity: { type: string, enum: [low, medium, high] }
+        confidence: { type: number }
+        reasoning: { type: string }
+
+    evidence:
+      - type: code
+        ref: src/contextcore/agent/size_estimation.py
+        description: SizeEstimator class with estimate() method (lines 50-100)
+      - type: code
+        ref: src/contextcore/agent/size_estimation.py
+        description: Heuristic constants and keyword patterns (lines 61-96)
+
+    confidence: 0.75
+
+# ==============================================================================
+# GLOBAL EVIDENCE
+# ==============================================================================
+
+evidence:
+  - type: doc
+    ref: docs/semantic-conventions.md
+    description: Attribute definitions for insight.*, handoff.*, agent.*
+  - type: doc
+    ref: inbox/OTEL_ALIGNED_MATURITY_MODEL.md
+    description: Maturity level definitions and transition criteria
+
+# ==============================================================================
+# RISK FLAGS
+# ==============================================================================
+
+risk_flags:
+  - id: risk:no-retry-on-export-failure
+    description: OTel span export failures are not retried—telemetry may be silently lost
+    affects: [contextcore.insight.emit, contextcore.handoff.initiate]
+  - id: risk:k8s-restart-loses-in-flight
+    description: Kubernetes pod restarts may lose in-flight handoffs not yet persisted
+    affects: [contextcore.handoff.initiate, contextcore.handoff.receive]
+
+# ==============================================================================
+# PIVOTED WORK (Anti-Patterns from Experience)
+# ==============================================================================
+
+pivoted_work:
+  - id: text-merge-to-ast
+    original: "Text-based merge_files_intelligently() using diff/patch"
+    outcome: "Corrupted Python files when merging class definitions"
+    lesson: "Text-based merging is insufficient for code; use language-aware tools (AST)"
+    evidence: src/contextcore/agent/parts.py
+  - id: single-emit-to-dual
+    original: "Emit task data to Tempo only (spans are sufficient)"
+    outcome: "Portfolio dashboard couldn't derive metrics from spans alone"
+    lesson: "Different backends excel at different queries; dual-emit to Tempo AND Loki"
+    evidence: CONTEXTCORE_OTEL_MODE env var
+
+# ==============================================================================
+# CHANGELOG
+# ==============================================================================
+
+changelog:
+  - version: "1.0.0"
+    date: "2026-01-28"
+    changes:
+      - "Initial capability index for agent-focused capabilities"
+      - "8 capabilities indexed: insight (2), handoff (2), guidance (2), code_generation (1), size_estimation (1)"
+      - "Evidence verified against source files"
+      - "OTel-aligned maturity: stable (2), experimental/beta (6)"
+      - "Risk flags and pivoted work documented"
