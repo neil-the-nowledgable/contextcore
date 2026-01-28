@@ -1,0 +1,46 @@
+# =============================================================================
+# TERM: CONTEXTCORE
+# =============================================================================
+# Token budget: ~150 tokens
+# =============================================================================
+
+term:
+  id: contextcore
+  name: ContextCore
+  type: standard
+  version: "1.0.0"
+
+  definition: |
+    The metadata model that defines how business context is structured,
+    queried, and exchanged between humans, agents, and systems.
+
+  provides:
+    - Schema for .contextcore.yaml project files
+    - Semantic conventions for attributes
+    - Protocol for context exchange
+    - CRD definitions for Kubernetes
+
+  is_not:
+    - An application
+    - A specific implementation
+    - Tied to any particular tooling
+
+  analogy:
+    comparison: "ContextCore is to Wayfinder as OpenTelemetry is to Tempo"
+    explanation: "The spec vs an implementation of that spec"
+
+  triggers:
+    - contextcore
+    - metadata_model
+    - specification
+    - standard
+    - context_standard
+
+  related_terms:
+    - wayfinder
+    - business_observability
+    - spider
+
+  persistence:
+    tempo_query: '{ term.id = "contextcore" }'
+    loki_query: '{job="terminology"} | json | term_id="contextcore"'
