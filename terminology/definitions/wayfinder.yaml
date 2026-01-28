@@ -1,0 +1,65 @@
+# =============================================================================
+# TERM: WAYFINDER
+# =============================================================================
+# Token budget: ~200 tokens
+# =============================================================================
+
+term:
+  id: wayfinder
+  name: Wayfinder
+  type: implementation
+  version: "1.0.0"
+  codename: Project Muad'Dib
+
+  definition: |
+    The reference implementation of the ContextCore standard—a suite of
+    integrated development and observability tools built for the
+    Language Model 1.0 era.
+
+  producer: Force Multiplier Labs
+
+  name_origin:
+    inspiration: "Muad'Dib (desert mouse) from Frank Herbert's Dune"
+    meaning: |
+      A small creature that survives in hostile terrain and "points the way."
+      Represents guidance through complexity with humility.
+    reflects:
+      - Guiding users through fragmented tooling
+      - Humble but essential (metadata enables everything)
+      - Wisdom without overclaiming
+    acknowledgment: |
+      We acknowledge valid criticism of Dune's colonial and orientalist overtones.
+      We adopt only the narrow metaphor: a small creature that survives through
+      wisdom rather than power, that points the way rather than conquers.
+    note: "No Sapho juice was consumed in the creation of most of this project."
+
+  components:
+    - spider: "Core framework"
+    - rabbit: "Alert automation"
+    - fox: "Context enrichment"
+    - coyote: "Incident resolution"
+    - beaver: "LLM abstraction"
+    - squirrel: "Skills library"
+
+  is_not:
+    - The only way to implement ContextCore
+    - The standard itself (that's ContextCore)
+    - A single package (it's a suite)
+
+  triggers:
+    - wayfinder
+    - suite
+    - implementation
+    - reference_implementation
+    - muad_dib
+    - project_muad_dib
+    - points_the_way
+
+  related_terms:
+    - contextcore
+    - spider
+    - language_model_1_0
+
+  persistence:
+    tempo_query: '{ term.id = "wayfinder" }'
+    loki_query: '{job="terminology"} | json | term_id="wayfinder"'

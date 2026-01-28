@@ -1,0 +1,46 @@
+# =============================================================================
+# TERM: BUSINESS OBSERVABILITY
+# =============================================================================
+# Token budget: ~180 tokens
+# =============================================================================
+
+term:
+  id: business_observability
+  name: Business Observability
+  type: paradigm
+  version: "1.0.0"
+
+  definition: |
+    The practice of grounding observability in business context—connecting
+    technical telemetry to business meaning, ownership, and impact.
+
+  key_insight: |
+    Observability frameworks like OpenTelemetry provide plumbing (traces,
+    metrics, logs) but not the business context needed to make that
+    plumbing useful. Business Observability bridges this gap.
+
+  enables:
+    - Stakeholders find "their" parts in dashboards
+    - Operators understand systems they didn't build
+    - Observability artifacts generated from business context
+    - Authoritative onboarding for humans and agents
+
+  contrasts_with:
+    - Ad-hoc dashboards disconnected from business meaning
+    - Technical metrics without stakeholder mapping
+    - Observability requiring construction knowledge
+
+  triggers:
+    - business_observability
+    - paradigm
+    - grounded
+    - business_context
+    - stakeholder_observability
+
+  related_terms:
+    - contextcore
+    - wayfinder
+
+  persistence:
+    tempo_query: '{ term.id = "business_observability" }'
+    loki_query: '{job="terminology"} | json | term_id="business_observability"'

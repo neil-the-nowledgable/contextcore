@@ -1,0 +1,68 @@
+# =============================================================================
+# TERM: NAMING PRINCIPLES
+# =============================================================================
+# Token budget: ~200 tokens
+# =============================================================================
+
+term:
+  id: naming_principles
+  name: Naming Principles
+  type: principle
+  version: "1.0.0"
+
+  definition: |
+    Guidelines for naming decisions in the Wayfinder ecosystem that
+    reflect values required for responsible LLM development.
+
+  # ---------------------------------------------------------------------------
+  # HONORING INDIGENOUS CULTURES
+  # ---------------------------------------------------------------------------
+  indigenous_recognition:
+    convention: Anishinaabe (Ojibwe) animal names
+    purpose: Honor indigenous peoples of Michigan and Great Lakes region
+    application: Each package named for an animal whose character reflects its purpose
+
+  # ---------------------------------------------------------------------------
+  # TERMS TO AVOID
+  # ---------------------------------------------------------------------------
+  avoid:
+    native:
+      context: Product naming (e.g., "LM-native", "cloud-native tooling")
+      reason: Potential for cultural appropriation
+      alternatives:
+        - "built for" instead of "native to"
+        - "designed for" instead of "native"
+        - "first-class" instead of "native support"
+      note: Technical usage in code (e.g., "native code") is acceptable
+
+  # ---------------------------------------------------------------------------
+  # GUIDING VALUES
+  # ---------------------------------------------------------------------------
+  values:
+    thoughtfulness:
+      description: Consider implications before choosing terms
+
+    inclusivity:
+      description: Avoid language that excludes or appropriates
+
+    humility:
+      description: Anti-hype, honest about limitations
+
+    respect:
+      description: For cultures, users, and the broader web of life
+
+  philosophy: |
+    LLM endeavors built on exploitation, appropriation, or harm are
+    unsustainable. Those built on respect and inclusion compound trust
+    over time. These principles aren't constraints—they're foundations.
+
+  triggers:
+    - naming
+    - principles
+    - avoid_native
+    - inclusive_naming
+    - anishinaabe
+
+  persistence:
+    tempo_query: '{ term.id = "naming_principles" }'
+    loki_query: '{job="terminology"} | json | term_id="naming_principles"'
