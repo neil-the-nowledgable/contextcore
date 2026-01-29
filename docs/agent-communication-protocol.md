@@ -83,7 +83,7 @@ insight_span:
 
 ```python
 from opentelemetry import trace
-from contextcore.insights import InsightEmitter
+from contextcore.agent.insights import InsightEmitter
 
 emitter = InsightEmitter(
     project_id="checkout-service",
@@ -147,7 +147,7 @@ Agents query insights from other agents via TraceQL.
 ### Python SDK Query
 
 ```python
-from contextcore.insights import InsightQuerier
+from contextcore.agent.insights import InsightQuerier
 
 querier = InsightQuerier(tempo_url="http://localhost:3200")
 
@@ -197,7 +197,7 @@ handoff_message:
   timeout_ms: integer             # Max wait time
 
   # State
-  status: enum                    # pending|accepted|in_progress|completed|failed|timeout
+  status: enum                    # pending|accepted|in_progress|input_required|completed|failed|timeout|cancelled|rejected
   created_at: timestamp
   result_trace_id: string         # Trace ID containing result
 ```
@@ -261,7 +261,7 @@ handoff_message:
 ### Python SDK: Handoff Creation
 
 ```python
-from contextcore.handoff import HandoffManager
+from contextcore.agent.handoff import HandoffManager
 
 manager = HandoffManager(
     project_id="checkout-service",
@@ -299,7 +299,7 @@ else:
 ### Python SDK: Handoff Reception
 
 ```python
-from contextcore.handoff import HandoffReceiver
+from contextcore.agent.handoff import HandoffReceiver
 
 receiver = HandoffReceiver(
     agent_id="o11y",
@@ -581,7 +581,7 @@ spec:
 ### Python SDK: Reading Guidance
 
 ```python
-from contextcore.guidance import GuidanceReader
+from contextcore.agent.guidance import GuidanceReader
 
 reader = GuidanceReader(project_id="checkout-service")
 
@@ -611,7 +611,7 @@ print(f"Context: {context.content}")
 ### Python SDK: Answering Questions
 
 ```python
-from contextcore.guidance import GuidanceResponder
+from contextcore.agent.guidance import GuidanceResponder
 
 responder = GuidanceResponder(
     project_id="checkout-service",
@@ -664,7 +664,7 @@ spec:
 ### Audience-Aware Query
 
 ```python
-from contextcore.personalization import PersonalizedQuerier
+from contextcore.agent.personalization import PersonalizedQuerier
 
 querier = PersonalizedQuerier(project_id="checkout-service")
 
@@ -690,6 +690,145 @@ agent_view = querier.get_insights(
 
 ---
 
+## Protocol 7: A2A Protocol Interoperability
+
+ContextCore handoffs are interoperable with the [A2A (Agent-to-Agent) Protocol](https://github.com/google/a2a-protocol) via bidirectional adapters.
+
+### Architecture
+
+```
+External A2A Agent              ContextCore Agent
+       │                              │
+       │  JSON-RPC 2.0 / HTTP        │
+       ├──────────────────────────────►│
+       │                              │
+       │        ┌─────────────────────┤
+       │        │  TaskAdapter        │
+       │        │  A2A Task ↔ Handoff │
+       │        └─────────────────────┤
+       │                              │
+       │◄──────────────────────────────┤
+       │                              │
+```
+
+### Components
+
+| Component | Module | Purpose |
+|-----------|--------|---------|
+| `TaskAdapter` | `contextcore.agent.a2a_adapter` | Bidirectional A2A Task ↔ Handoff conversion |
+| `A2AMessageHandler` | `contextcore.agent.a2a_messagehandler` | JSON-RPC 2.0 request routing |
+| `A2AServer` | `contextcore.agent.a2a_server` | HTTP server (Flask/FastAPI) with discovery endpoints |
+| `A2AClient` | `contextcore.agent.a2a_client` | Client for communicating with remote A2A agents |
+
+### State Mapping
+
+| ContextCore HandoffStatus | A2A TaskState | Direction |
+|---------------------------|---------------|-----------|
+| `pending` | `PENDING` | Both |
+| `accepted` | `WORKING` | CC → A2A |
+| `in_progress` | `WORKING` | Both |
+| `input_required` | `INPUT_REQUIRED` | Both |
+| `completed` | `COMPLETED` | Both |
+| `failed` | `FAILED` | Both |
+| `timeout` | `FAILED` | CC → A2A |
+| `cancelled` | `CANCELLED` | Both |
+| `rejected` | `REJECTED` | Both |
+
+### A2A Server Example
+
+```python
+from contextcore.agent.a2a_server import create_a2a_server
+
+server = create_a2a_server(
+    agent_id="my-agent",
+    agent_name="My Agent",
+    base_url="http://localhost:8080",
+    project_id="my-project",
+)
+server.run()  # Starts Flask server with:
+# GET  /.well-known/agent.json     → Agent card discovery
+# GET  /.well-known/contextcore.json → CC-specific metadata
+# POST /a2a                         → JSON-RPC 2.0 handler
+# GET  /health                      → Health check
+```
+
+### A2A Client Example
+
+```python
+from contextcore.agent.a2a_client import A2AClient
+from contextcore.models.message import Message
+
+with A2AClient("http://remote-agent:8080") as client:
+    # Discover remote agent capabilities
+    card = client.get_agent_card()
+    print(f"Agent: {card.name}, capabilities: {card.capabilities}")
+
+    # Send message and get task result
+    result = client.send_text("Analyze checkout latency spike")
+    print(f"Task: {result['taskId']}, status: {result['status']}")
+```
+
+### A2A Message Content Model
+
+ContextCore uses a unified content model compatible with A2A message parts:
+
+```python
+from contextcore.models import Part, PartType, Message, MessageRole, Artifact
+
+# Create a message with typed parts
+msg = Message(
+    role=MessageRole.USER,
+    parts=[
+        Part.text("Investigate this trace"),
+        Part.trace("abc123def456"),
+        Part.json_data({"threshold": 200, "metric": "p99_latency"}),
+    ],
+    agent_id="orchestrator",
+)
+
+# Serialize for A2A transport
+a2a_dict = msg.to_a2a_dict()
+
+# Create artifacts with trace correlation
+artifact = Artifact.from_json(
+    data={"root_cause": "N+1 query", "evidence": ["trace-xyz"]},
+    trace_id="abc123def456",
+)
+```
+
+### JSON-RPC Methods
+
+| Method | Description | Maps To |
+|--------|-------------|---------|
+| `message.send` | Send message to agent | `HandoffsAPI.create()` |
+| `tasks.get` | Get task status | `HandoffsAPI.get()` |
+| `tasks.list` | List tasks | `HandoffsAPI.list()` |
+| `tasks.cancel` | Cancel a task | `HandoffsAPI.cancel()` |
+| `agent.getExtendedAgentCard` | Get agent card | `AgentCard.to_a2a_json()` |
+
+### Input Request Protocol
+
+When an A2A agent needs additional input during task execution:
+
+```python
+from contextcore.agent.input_request import InputRequest, InputType, InputOption
+
+request = InputRequest(
+    handoff_id="handoff-123",
+    question="Which database should I investigate?",
+    input_type=InputType.CHOICE,
+    options=[
+        InputOption(value="postgres", label="PostgreSQL Primary"),
+        InputOption(value="redis", label="Redis Cache"),
+    ],
+    timeout_ms=60000,
+)
+# Handoff status transitions to INPUT_REQUIRED
+# Resumes to IN_PROGRESS when response received
+```
+
+---
+
 ## Human-Readable Documentation (Below)
 
 ### Why These Protocols Matter
@@ -700,6 +839,7 @@ agent_view = querier.get_insights(
 4. **Code Generation**: Proactive truncation prevention ensures complete output
 5. **Guidance**: Human direction persists across sessions
 6. **Personalization**: Same data serves all audiences appropriately
+7. **A2A Interoperability**: ContextCore agents communicate with any A2A-compatible agent
 
 ### Design Principles
 

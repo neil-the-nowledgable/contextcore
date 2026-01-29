@@ -27,9 +27,9 @@ except ImportError:
     FastAPI = HTTPException = Request = JSONResponse = None
     HAS_FASTAPI = False
 
-from contextcore.a2a.models import AgentCard, AgentCapabilities
-from contextcore.a2a.handler import A2AMessageHandler
-from contextcore.a2a.discovery import DiscoveryEndpoint
+from contextcore.discovery.agentcard import AgentCard, AgentCapabilities
+from contextcore.agent.a2a_messagehandler import A2AMessageHandler
+from contextcore.discovery.endpoint import DiscoveryEndpoint
 from contextcore.api import HandoffsAPI, SkillsAPI
 
 logger = logging.getLogger(__name__)

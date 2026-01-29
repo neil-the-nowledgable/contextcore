@@ -1,6 +1,4 @@
 """A2A client for communicating with A2A-compatible agents."""
-__all__ = ['A2AError', 'A2AClient']
-
 
 from __future__ import annotations
 
@@ -9,11 +7,10 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from ..agents.card import AgentCard
-from ..core.handoff import Handoff
-from ..core.message import Message
-from .adapters import TaskAdapter
-from .auth import AuthConfig
+from contextcore.discovery.agentcard import AgentCard, AuthConfig
+from contextcore.agent.handoff import Handoff
+from contextcore.models.message import Message
+from contextcore.agent.a2a_adapter import TaskAdapter
 import json
 
 __all__ = ["A2AClient", "A2AError"]

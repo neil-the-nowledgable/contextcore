@@ -11,9 +11,9 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime, timezone
 import uuid
 
-from ..models.handoff import Handoff, HandoffStatus, HandoffPriority, ExpectedOutput
-from ..models.message import Message
-from ..models.artifact import Artifact
+from contextcore.agent.handoff import Handoff, HandoffStatus, HandoffPriority, ExpectedOutput
+from contextcore.models.message import Message
+from contextcore.models.artifact import Artifact
 
 
 class TaskState(str, Enum):
@@ -194,10 +194,3 @@ class TaskAdapter:
 
 
 __all__ = ["TaskState", "TaskAdapter"]
-
-
-# Convert Handoff to A2A Task
-task_json = TaskAdapter.handoff_to_task(handoff, messages, artifacts)
-
-# Convert A2A Task to Handoff
-handoff = TaskAdapter.task_to_handoff(task_json, "agent1", "agent2", "capability")

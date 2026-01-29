@@ -8,9 +8,9 @@ from typing import Any, Callable, Dict, List, Optional
 
 from contextcore.api.handoffs import HandoffsAPI
 from contextcore.api.skills import SkillsAPI
-from contextcore.models.agent_card import AgentCard
+from contextcore.discovery.agentcard import AgentCard
 from contextcore.models.message import Message
-from contextcore.a2a.task_adapter import TaskAdapter
+from contextcore.agent.a2a_adapter import TaskAdapter
 
 
 class A2AErrorCode(IntEnum):

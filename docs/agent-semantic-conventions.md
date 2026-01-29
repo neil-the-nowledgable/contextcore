@@ -194,9 +194,23 @@ Agent-to-agent task delegation.
 - `pending` - Not yet accepted
 - `accepted` - Receiving agent acknowledged
 - `in_progress` - Work underway
+- `input_required` - Agent needs additional input before continuing (A2A-aligned)
 - `completed` - Result available
 - `failed` - Could not complete
 - `timeout` - Exceeded timeout
+- `cancelled` - Task was cancelled (A2A-aligned)
+- `rejected` - Receiving agent rejected the handoff (A2A-aligned)
+
+**State Machine Helpers** (Python SDK):
+```python
+from contextcore.agent.handoff import HandoffStatus
+
+status = HandoffStatus.IN_PROGRESS
+status.is_terminal()                          # False
+status.is_active()                            # True
+status.can_transition_to(HandoffStatus.COMPLETED)  # True
+status.can_transition_to(HandoffStatus.PENDING)    # False (invalid transition)
+```
 
 **Example:**
 ```yaml

@@ -1,30 +1,19 @@
 """
-ContextCore Unified API Package
+ContextCore Unified API Package.
 
-This module provides a unified interface to all ContextCore APIs including insights,
-handoffs, and skills management. It offers both individual API access through factory
-functions and a combined interface through the ContextCoreAPI class.
+Provides individual API access via factory functions and a combined
+interface through ContextCoreAPI.
 
-Usage Examples:
-    # Individual API usage
-    insights = create_insights_api("checkout", "claude-code")
-    insights.emit(type="decision", summary="Chose fast path", confidence=0.9)
-    
-    # Unified API usage
-    api = ContextCoreAPI(project_id="checkout", agent_id="claude-code")
-    
-    # Emit insight
+Example:
+    # Individual API
+    insights = create_insights_api("checkout", "claude")
+    insights.emit(type="decision", summary="Chose X", confidence=0.9)
+
+    # Unified API
+    api = ContextCoreAPI(project_id="checkout", agent_id="claude")
     api.insights.emit(type="decision", summary="...", confidence=0.9)
-    
-    # Create handoff
-    handoff = api.handoffs.create(
-        to_agent="o11y",
-        capability_id="investigate", 
-        task="Find root cause"
-    )
-    
-    # Query skills
-    skills = api.skills.query(trigger="format")
+    api.handoffs.create(to_agent="o11y", capability_id="investigate", task="...", inputs={})
+    api.skills.query(trigger="format")
 """
 
 from __future__ import annotations
@@ -32,88 +21,42 @@ from __future__ import annotations
 from contextcore.api.insights import InsightsAPI
 from contextcore.api.handoffs import HandoffsAPI
 from contextcore.api.skills import SkillsAPI
-from contextcore.handoffs.storage import HandoffStorage
 
 __all__ = [
     "InsightsAPI",
-    "HandoffsAPI", 
+    "HandoffsAPI",
     "SkillsAPI",
+    "ContextCoreAPI",
     "create_insights_api",
     "create_handoffs_api",
     "create_skills_api",
-    "ContextCoreAPI"
 ]
 
 
 def create_insights_api(project_id: str, agent_id: str, **kwargs) -> InsightsAPI:
-    """Create configured InsightsAPI instance.
-    
-    Args:
-        project_id: The project identifier
-        agent_id: The agent identifier
-        **kwargs: Additional configuration parameters (e.g., tempo_url)
-        
-    Returns:
-        Configured InsightsAPI instance
-    """
+    """Create configured InsightsAPI instance."""
     return InsightsAPI(project_id=project_id, agent_id=agent_id, **kwargs)
 
 
 def create_handoffs_api(project_id: str, agent_id: str, **kwargs) -> HandoffsAPI:
-    """Create configured HandoffsAPI instance.
-    
-    Args:
-        project_id: The project identifier
-        agent_id: The agent identifier
-        **kwargs: Additional configuration parameters (e.g., storage, tempo_url)
-        
-    Returns:
-        Configured HandoffsAPI instance
-    """
+    """Create configured HandoffsAPI instance."""
     return HandoffsAPI(project_id=project_id, agent_id=agent_id, **kwargs)
 
 
 def create_skills_api(agent_id: str, **kwargs) -> SkillsAPI:
-    """Create configured SkillsAPI instance.
-    
-    Args:
-        agent_id: The agent identifier
-        **kwargs: Additional configuration parameters (e.g., tempo_url)
-        
-    Returns:
-        Configured SkillsAPI instance
-    """
+    """Create configured SkillsAPI instance."""
     return SkillsAPI(agent_id=agent_id, **kwargs)
 
 
 class ContextCoreAPI:
     """Unified API for all ContextCore agent operations.
-    
-    This class provides a single entry point to access insights, handoffs, and skills
-    APIs with consistent configuration across all subsystems.
-    
+
     Example:
-        api = ContextCoreAPI(project_id="checkout", agent_id="claude-code")
-        
-        # Emit insight
+        api = ContextCoreAPI(project_id="checkout", agent_id="claude")
         api.insights.emit(type="decision", summary="...", confidence=0.9)
-        
-        # Create handoff  
-        handoff = api.handoffs.create(
-            to_agent="o11y",
-            capability_id="investigate",
-            task="Find root cause"
-        )
-        
-        # Query skills
-        skills = api.skills.query(trigger="format")
-    
-    Attributes:
-        insights: InsightsAPI instance for emitting and querying insights
-        handoffs: HandoffsAPI instance for creating and managing handoffs
-        skills: SkillsAPI instance for skill discovery and management
-        project_id: The project identifier used across APIs
-        agent_id: The agent identifier used across APIs
+        api.handoffs.create(to_agent="o11y", capability_id="investigate",
+                           task="...", inputs={})
+        api.skills.query(trigger="format")
     """
 
     def __init__(
@@ -121,40 +64,29 @@ class ContextCoreAPI:
         project_id: str,
         agent_id: str,
         tempo_url: str | None = None,
-        storage: HandoffStorage | None = None,
-    ):
-        """Initialize unified ContextCore API.
-        
-        Args:
-            project_id: The project identifier
-            agent_id: The agent identifier  
-            tempo_url: Optional Tempo URL for insights and skills APIs
-            storage: Optional storage backend for handoffs API
-        """
-        # Store configuration for reference
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> None:
         self.project_id = project_id
         self.agent_id = agent_id
-        
-        # Initialize individual APIs with appropriate parameters
-        insights_kwargs = {"tempo_url": tempo_url} if tempo_url else {}
-        handoffs_kwargs = {}
+
+        insights_kwargs: dict = {}
         if tempo_url:
-            handoffs_kwargs["tempo_url"] = tempo_url
-        if storage:
-            handoffs_kwargs["storage"] = storage
-        skills_kwargs = {"tempo_url": tempo_url} if tempo_url else {}
-        
+            insights_kwargs["tempo_url"] = tempo_url
         self.insights = InsightsAPI(
-            project_id=project_id, 
-            agent_id=agent_id, 
-            **insights_kwargs
+            project_id=project_id, agent_id=agent_id, **insights_kwargs,
         )
+
+        handoffs_kwargs: dict = {}
+        if provider:
+            handoffs_kwargs["provider"] = provider
+        if model:
+            handoffs_kwargs["model"] = model
         self.handoffs = HandoffsAPI(
-            project_id=project_id, 
-            agent_id=agent_id, 
-            **handoffs_kwargs
+            project_id=project_id, agent_id=agent_id, **handoffs_kwargs,
         )
-        self.skills = SkillsAPI(
-            agent_id=agent_id, 
-            **skills_kwargs
-        )
+
+        skills_kwargs: dict = {}
+        if tempo_url:
+            skills_kwargs["tempo_url"] = tempo_url
+        self.skills = SkillsAPI(agent_id=agent_id, **skills_kwargs)
