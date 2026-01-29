@@ -273,6 +273,95 @@ ContextCore attributes appear on:
 
 ---
 
+## OTel Standard Resource Attributes
+
+ContextCore automatically includes standard OpenTelemetry resource attributes on all telemetry. These enable backend systems to identify the SDK, service, and runtime environment.
+
+### Telemetry SDK Attributes
+
+| Attribute | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `telemetry.sdk.name` | string | SDK name | `"opentelemetry"` |
+| `telemetry.sdk.language` | string | SDK language | `"python"` |
+| `telemetry.sdk.version` | string | SDK version | `"1.39.1"` |
+
+### Service Attributes
+
+| Attribute | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `service.name` | string | Service name | `"contextcore-tracker"` |
+| `service.namespace` | string | Service namespace | `"contextcore"` |
+| `service.version` | string | Service version | `"0.1.0"` |
+
+### Host & Process Attributes
+
+| Attribute | Type | Description | Example |
+|-----------|------|-------------|---------|
+| `host.name` | string | Hostname | `"my-laptop.local"` |
+| `host.arch` | string | CPU architecture | `"arm64"`, `"x86_64"` |
+| `os.type` | string | Operating system | `"darwin"`, `"linux"` |
+| `os.version` | string | OS version | `"24.6.0"` |
+| `process.pid` | int | Process ID | `12345` |
+| `process.executable.path` | string | Python executable | `"/usr/bin/python3"` |
+| `process.runtime.name` | string | Python implementation | `"CPython"` |
+| `process.runtime.version` | string | Python version | `"3.11.5"` |
+
+### Example Resource Output
+
+```json
+{
+  "telemetry.sdk.name": "opentelemetry",
+  "telemetry.sdk.language": "python",
+  "telemetry.sdk.version": "1.39.1",
+  "service.name": "contextcore-tracker",
+  "service.namespace": "contextcore",
+  "service.version": "0.1.0",
+  "host.name": "my-laptop.local",
+  "host.arch": "arm64",
+  "os.type": "darwin",
+  "os.version": "24.6.0",
+  "process.pid": 12345,
+  "deployment.environment.name": "production",
+  "project.id": "my-project"
+}
+```
+
+---
+
+## Span Naming Conventions
+
+ContextCore follows OTel span naming conventions:
+
+- **Use dot separators**: `contextcore.task.story` not `task:PROJ-123`
+- **Low cardinality names**: Type in name, ID in attributes
+- **Namespace prefix**: `contextcore.*` for ContextCore spans
+
+### Task Spans
+
+| Span Name | Description | Key Attributes |
+|-----------|-------------|----------------|
+| `contextcore.task.epic` | Epic task span | `task.id`, `task.title` |
+| `contextcore.task.story` | Story task span | `task.id`, `task.title`, `task.parent_id` |
+| `contextcore.task.task` | Task span | `task.id`, `task.title` |
+| `contextcore.task.subtask` | Subtask span | `task.id`, `task.parent_id` |
+| `contextcore.task.bug` | Bug fix span | `task.id`, `task.title` |
+| `contextcore.sprint` | Sprint span | `sprint.id`, `sprint.name` |
+
+### TraceQL Queries
+
+```traceql
+# Find all story tasks (uses span name, not attribute)
+{ name = "contextcore.task.story" }
+
+# Find specific task by ID (attribute query)
+{ name =~ "contextcore.task.*" && span.task.id = "PROJ-123" }
+
+# Find all sprints
+{ name = "contextcore.sprint" }
+```
+
+---
+
 ## Naming Conventions
 
 ### Namespace Prefixes
@@ -576,12 +665,81 @@ Standard K8s attributes are also included:
 
 ---
 
+## Deployment Environment (OTel Standard)
+
+ContextCore supports the OTel semantic convention `deployment.environment.name` which is being stabilized for cross-vendor interoperability.
+
+### `deployment.environment.name`
+- **Type**: `string`
+- **Description**: Name of the deployment environment (production, staging, development, etc.)
+- **Example**: `"production"`, `"staging"`, `"development"`, `"test"`
+- **Status**: Experimental (tracking OTel stabilization)
+
+### Why This Matters
+
+This attribute enables:
+- **Alert Routing**: `deployment.environment.name == 'production'` → page on-call
+- **Cost Attribution**: Map telemetry costs to FinOps categories (prod=COGS, dev=R&D)
+- **Data Residency**: Route production PII to encrypted storage
+- **Service Graph Differentiation**: Separate prod/staging traffic in Grafana topology
+
+### Vendor Mapping
+
+The attribute maps to vendor-specific reserved keys:
+
+| Platform | Attribute Key | Notes |
+|----------|--------------|-------|
+| **Datadog** | `env` | Reserved tag, lowercase |
+| **Splunk** | `deployment.environment` | Indexed dimension |
+| **Grafana** | `deployment_environment` | Snake_case preferred |
+| **New Relic** | `tags.Environment` | Key-value pair |
+
+### Detection Sources
+
+ContextCore detects `deployment.environment.name` from (in priority order):
+
+1. **K8s Annotations**:
+   - `contextcore.io/environment`
+   - `contextcore.io/env`
+   - `contextcore.io/deployment-environment`
+
+2. **Environment Variables**:
+   - `CONTEXTCORE_ENVIRONMENT`
+   - `DEPLOYMENT_ENVIRONMENT`
+
+### Example Usage
+
+**K8s Pod Annotation:**
+```yaml
+metadata:
+  annotations:
+    contextcore.io/environment: "production"
+```
+
+**Environment Variable:**
+```bash
+export CONTEXTCORE_ENVIRONMENT=production
+```
+
+**In Resource Attributes:**
+```json
+{
+  "deployment.environment.name": "production",
+  "project.id": "checkout-service",
+  "business.criticality": "critical"
+}
+```
+
+---
+
 ## K8s Annotations
 
 ContextCore uses annotations with the `contextcore.io/` prefix:
 
 | Annotation | Maps To |
 |------------|---------|
+| `contextcore.io/environment` | `deployment.environment.name` |
+| `contextcore.io/env` | `deployment.environment.name` |
 | `contextcore.io/project` | `project.id` |
 | `contextcore.io/epic` | `project.epic` |
 | `contextcore.io/task` | `project.task` |
@@ -613,6 +771,8 @@ ContextCore uses annotations with the `contextcore.io/` prefix:
 
 ```json
 {
+  "deployment.environment.name": "production",
+
   "project.id": "commerce-platform",
   "project.epic": "EPIC-42",
   "project.task": "TASK-789",
