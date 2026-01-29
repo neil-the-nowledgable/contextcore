@@ -43,6 +43,11 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExport
 from opentelemetry.trace import Link, SpanKind, Status, StatusCode
 
 from contextcore.contracts.types import TaskStatus, TaskType, Priority
+from contextcore.detector import (
+    get_telemetry_sdk_attributes,
+    get_service_attributes,
+    get_host_attributes,
+)
 from contextcore.logger import TaskLogger
 from contextcore.state import StateManager, SpanState, format_trace_id, format_span_id
 from contextcore.compat.otel_genai import transform_attributes
@@ -122,13 +127,19 @@ class TaskTracker:
         # Initialize state manager for persistence
         self._state_manager = StateManager(project=project, state_dir=state_dir)
 
-        # Initialize OTel
-        resource = Resource.create({
-            "service.name": service_name,
-            "service.namespace": "contextcore",
+        # Initialize OTel with standard resource attributes
+        resource_attrs = {
+            # Standard OTel SDK attributes
+            **get_telemetry_sdk_attributes(),
+            # Service identification (override service.name if provided)
+            **get_service_attributes(service_name=service_name),
+            # Host/process/OS context
+            **get_host_attributes(),
+            # ContextCore project attributes
             PROJECT_ID: project,
             PROJECT_NAME: project,
-        })
+        }
+        resource = Resource.create(resource_attrs)
 
         self._provider = TracerProvider(resource=resource)
         self._export_mode = EXPORT_MODE_NONE
@@ -381,8 +392,11 @@ class TaskTracker:
         if parent_id and parent_id in self._active_spans:
             parent_context = trace.set_span_in_context(self._active_spans[parent_id])
 
-        # Create span name
-        span_name = f"{task_type}:{task_id}"
+        # Create span name following OTel conventions:
+        # - Use dot separators (not colons)
+        # - Keep type in name (low cardinality)
+        # - ID goes in attributes (task.id), not span name (high cardinality)
+        span_name = f"contextcore.task.{task_type}"
 
         # Start the span
         span = self._tracer.start_span(
@@ -997,8 +1011,11 @@ class SprintTracker:
         if planned_points is not None:
             attributes["sprint.planned_points"] = planned_points
 
+        # Sprint span name follows OTel conventions:
+        # - Use dot separator (not colon)
+        # - ID goes in attributes (sprint.id), not span name
         span = self._tracer.start_span(
-            name=f"sprint:{sprint_id}",
+            name="contextcore.sprint",
             kind=SpanKind.INTERNAL,
             attributes=attributes)
 

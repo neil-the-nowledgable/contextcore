@@ -13,6 +13,7 @@ Usage:
     provider = TracerProvider(resource=resource)
 
 All spans/metrics/logs will include attributes like:
+    - deployment.environment.name (OTel standard)
     - project.id
     - project.epic
     - business.criticality
@@ -24,17 +25,128 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Dict, Optional
+import platform
+import socket
+from typing import Any, Dict, Optional, Union
 
 from opentelemetry.sdk.resources import Resource, ResourceDetector
 
 logger = logging.getLogger(__name__)
+
+
+def _get_sdk_version() -> str:
+    """Get OpenTelemetry SDK version."""
+    try:
+        from opentelemetry.sdk import version
+        return version.__version__
+    except (ImportError, AttributeError):
+        return "unknown"
+
+
+def _get_contextcore_version() -> str:
+    """Get ContextCore package version."""
+    try:
+        import contextcore
+        return getattr(contextcore, "__version__", "unknown")
+    except ImportError:
+        return "unknown"
+
+
+def get_telemetry_sdk_attributes() -> Dict[str, str]:
+    """
+    Get standard OTel telemetry.sdk.* resource attributes.
+
+    These attributes identify the SDK being used to generate telemetry,
+    enabling backend systems to understand the telemetry source.
+
+    See: https://opentelemetry.io/docs/specs/semconv/resource/#telemetry-sdk
+    """
+    return {
+        "telemetry.sdk.name": "opentelemetry",
+        "telemetry.sdk.language": "python",
+        "telemetry.sdk.version": _get_sdk_version(),
+    }
+
+
+def get_service_attributes(
+    service_name: str = "contextcore",
+    service_namespace: str = "contextcore",
+) -> Dict[str, str]:
+    """
+    Get standard OTel service.* resource attributes.
+
+    These attributes identify the service generating telemetry.
+
+    See: https://opentelemetry.io/docs/specs/semconv/resource/#service
+    """
+    return {
+        "service.name": service_name,
+        "service.namespace": service_namespace,
+        "service.version": _get_contextcore_version(),
+    }
+
+
+def get_host_attributes() -> Dict[str, Union[str, int]]:
+    """
+    Get standard OTel host.* and process.* resource attributes.
+
+    These attributes identify the host and process running the service.
+
+    See: https://opentelemetry.io/docs/specs/semconv/resource/host/
+    See: https://opentelemetry.io/docs/specs/semconv/resource/process/
+    """
+    attrs: Dict[str, Any] = {}
+
+    # Host attributes
+    try:
+        attrs["host.name"] = socket.gethostname()
+    except Exception:
+        pass
+
+    try:
+        attrs["host.arch"] = platform.machine()
+    except Exception:
+        pass
+
+    # OS attributes
+    try:
+        attrs["os.type"] = platform.system().lower()
+    except Exception:
+        pass
+
+    try:
+        attrs["os.version"] = platform.release()
+    except Exception:
+        pass
+
+    # Process attributes
+    try:
+        attrs["process.pid"] = os.getpid()
+    except Exception:
+        pass
+
+    try:
+        import sys
+        attrs["process.executable.path"] = sys.executable
+        attrs["process.runtime.name"] = platform.python_implementation()
+        attrs["process.runtime.version"] = platform.python_version()
+    except Exception:
+        pass
+
+    return attrs
 
 # Annotation prefix for ContextCore
 ANNOTATION_PREFIX = "contextcore.io/"
 
 # Mapping from annotation keys to OTel resource attribute names
 ANNOTATION_TO_ATTRIBUTE = {
+    # Deployment Environment (OTel standard - being stabilized)
+    # See: https://github.com/open-telemetry/semantic-conventions
+    # Maps to Datadog 'env', Splunk 'deployment.environment', Grafana 'deployment_environment'
+    "environment": "deployment.environment.name",
+    "env": "deployment.environment.name",
+    "deployment-environment": "deployment.environment.name",
+
     # Project
     "project": "project.id",
     "project-id": "project.id",
@@ -106,19 +218,35 @@ class ProjectContextDetector(ResourceDetector):
         """
         Detect project context and return as Resource.
 
+        Includes standard OTel resource attributes:
+        - telemetry.sdk.* (SDK identification)
+        - service.* (service identification)
+        - host.*, os.*, process.* (runtime context)
+        - deployment.environment.name (deployment context)
+        - project.*, business.*, etc. (ContextCore-specific)
+
         Attempts to read from K8s annotations first, then falls back to
         environment variables for local development.
         """
-        attributes: Dict[str, str] = {}
+        attributes: Dict[str, Any] = {}
 
-        # Try K8s annotations first
+        # 1. Add standard OTel SDK attributes (always present)
+        attributes.update(get_telemetry_sdk_attributes())
+
+        # 2. Add service attributes
+        attributes.update(get_service_attributes())
+
+        # 3. Add host/process/OS attributes
+        attributes.update(get_host_attributes())
+
+        # 4. Try K8s annotations for project context
         try:
             k8s_attrs = self._detect_from_k8s()
             attributes.update(k8s_attrs)
         except Exception as e:
             logger.debug(f"Could not detect from K8s: {e}")
 
-        # Fallback to environment variables
+        # 5. Fallback to environment variables (don't overwrite existing)
         env_attrs = self._detect_from_env()
         for key, value in env_attrs.items():
             if key not in attributes:
@@ -204,6 +332,11 @@ class ProjectContextDetector(ResourceDetector):
 
         # Map environment variables to attributes
         env_mapping = {
+            # Deployment environment (OTel standard)
+            # Supports multiple common env var names for compatibility
+            "CONTEXTCORE_ENVIRONMENT": "deployment.environment.name",
+            "DEPLOYMENT_ENVIRONMENT": "deployment.environment.name",
+            # Project
             "CONTEXTCORE_PROJECT_ID": "project.id",
             "CONTEXTCORE_EPIC": "project.epic",
             "CONTEXTCORE_TASK": "project.task",
@@ -220,7 +353,9 @@ class ProjectContextDetector(ResourceDetector):
         for env_var, attr_name in env_mapping.items():
             value = os.environ.get(env_var)
             if value:
-                attributes[attr_name] = value
+                # Don't overwrite if already set (first match wins)
+                if attr_name not in attributes:
+                    attributes[attr_name] = value
 
         return attributes
 

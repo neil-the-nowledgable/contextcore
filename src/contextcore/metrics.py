@@ -35,6 +35,11 @@ from contextcore.contracts.timeouts import (
     OTEL_ENDPOINT_CHECK_TIMEOUT_S,
     OTEL_DEFAULT_GRPC_PORT,
 )
+from contextcore.detector import (
+    get_telemetry_sdk_attributes,
+    get_service_attributes,
+    get_host_attributes,
+)
 from contextcore.state import StateManager, SpanState
 
 logger = logging.getLogger(__name__)
@@ -87,12 +92,18 @@ class TaskMetrics:
         self._export_mode = METRICS_EXPORT_MODE_NONE
         self._shutdown_called = False
 
-        # Initialize OTel metrics
-        resource = Resource.create({
-            "service.name": service_name,
-            "service.namespace": "contextcore",
+        # Initialize OTel metrics with standard resource attributes
+        resource_attrs = {
+            # Standard OTel SDK attributes
+            **get_telemetry_sdk_attributes(),
+            # Service identification (override service.name if provided)
+            **get_service_attributes(service_name=service_name),
+            # Host/process/OS context
+            **get_host_attributes(),
+            # ContextCore project attributes
             "project.id": project,
-        })
+        }
+        resource = Resource.create(resource_attrs)
 
         # Set up exporter
         if exporter:
