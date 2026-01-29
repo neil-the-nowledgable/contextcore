@@ -33,6 +33,7 @@ import atexit
 import logging
 import os
 import socket
+import traceback
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -727,6 +728,53 @@ class TaskTracker:
             return None
         return self._active_spans[task_id]
 
+    def _record_exception(
+        self,
+        span: Span,
+        exc: BaseException,
+        task_id: Optional[str] = None,
+    ) -> None:
+        """
+        Record an exception on a span with OTel standard attributes.
+
+        Adds an event named "exception" with:
+        - exception.type: Fully qualified exception class name
+        - exception.message: Exception message string
+        - exception.stacktrace: Full stack trace
+
+        Also sets the span status to ERROR.
+
+        See: https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+        """
+        # record_exception is a standard OTel SDK method that handles
+        # exception.type, exception.message, and exception.stacktrace
+        span.record_exception(exc)
+        span.set_status(Status(
+            StatusCode.ERROR,
+            f"{type(exc).__name__}: {exc}",
+        ))
+        if task_id:
+            logger.debug(f"Recorded exception on task {task_id}: {exc}")
+
+    def record_task_exception(
+        self,
+        task_id: str,
+        exc: BaseException,
+    ) -> None:
+        """
+        Record an exception against a task's span (public API).
+
+        Use this to record errors that occur during task execution,
+        e.g., build failures, test failures, deployment errors.
+
+        Args:
+            task_id: Task identifier
+            exc: The exception to record
+        """
+        span = self._get_span(task_id)
+        if span:
+            self._record_exception(span, exc, task_id)
+
     def _increment_subtask_count(self, parent_id: str) -> None:
         """Increment subtask count on parent span."""
         span = self._get_span(parent_id)
@@ -935,6 +983,8 @@ class TaskTracker:
                 self._state_manager.save_span(state)
 
             except Exception as e:
+                # Record exception on the task span with OTel standard attributes
+                self._record_exception(span, e, task_id)
                 logger.warning(f"Failed to save state for {task_id}: {e}")
 
     def shutdown(self) -> None:

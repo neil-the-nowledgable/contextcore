@@ -815,6 +815,55 @@ Task spans use events to track lifecycle changes:
 
 ---
 
+## Exception Span Attributes
+
+When exceptions occur during task operations, ContextCore records them on the active span following the [OTel exception semantic conventions](https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/).
+
+The `span.record_exception()` API automatically adds:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `exception.type` | `string` | Fully-qualified exception class name |
+| `exception.message` | `string` | Exception message string |
+| `exception.stacktrace` | `string` | Full stack trace as a string |
+
+Additionally, the span status is set to `ERROR` with a description of the form `"{ExceptionType}: {message}"`.
+
+### When Exceptions Are Recorded
+
+| Operation | Trigger | Example |
+|-----------|---------|---------|
+| State persistence | `_save_state()` fails (I/O error, serialization) | `OSError: disk full` |
+| Task exception | `record_task_exception()` called by consumer | Application-specific errors |
+
+### Example: Exception on a Task Span
+
+```
+Span: contextcore.task.story
+  Status: ERROR ("OSError: disk full")
+  Events:
+    - name: "exception"
+      attributes:
+        exception.type: "OSError"
+        exception.message: "disk full"
+        exception.stacktrace: "Traceback (most recent call last):\n  ..."
+```
+
+### TraceQL Queries for Exceptions
+
+```traceql
+# Find all task spans with exceptions
+{ rootServiceName = "contextcore" && status = error }
+
+# Find specific exception types
+{ span.exception.type = "TimeoutError" }
+
+# Exceptions on story tasks
+{ name = "contextcore.task.story" && status = error }
+```
+
+---
+
 ## Derived Metrics
 
 ContextCore derives these metrics from task spans:
@@ -830,6 +879,82 @@ ContextCore derives these metrics from task spans:
 | `task.count_by_status` | Gauge | Task count by status |
 | `task.count_by_type` | Gauge | Task count by type |
 | `sprint.velocity` | Gauge | Story points per sprint |
+
+---
+
+## OTel Log Data Model Compliance
+
+ContextCore structured logs follow the [OTel Log Data Model](https://opentelemetry.io/docs/specs/otel/logs/data-model/) for interoperability with any OTel-compatible log backend.
+
+### Standard Fields
+
+Every log entry includes these OTel-standard fields:
+
+| Field | Type | Description | Reference |
+|-------|------|-------------|-----------|
+| `timestamp` | `string` | ISO 8601 UTC timestamp | Human-readable form |
+| `timestamp_unix_nano` | `int` | Nanoseconds since epoch | OTel standard timestamp |
+| `severity_number` | `int` | Severity 1-24 per RFC 5424 mapping | [Severity Fields](https://opentelemetry.io/docs/specs/otel/logs/data-model/#severity-fields) |
+| `severity_text` | `string` | Uppercase level (`INFO`, `WARN`, `ERROR`) | OTel standard |
+| `body` | `string` | Log message (event name) | OTel standard |
+| `trace_id` | `string` | 32-char hex trace ID | Log-to-trace correlation |
+| `span_id` | `string` | 16-char hex span ID | Log-to-trace correlation |
+| `trace_flags` | `int` | W3C trace flags (if set) | Sampling context |
+
+### Severity Number Mapping
+
+ContextCore maps log levels to OTel severity numbers (RFC 5424 aligned):
+
+| Level | severity_number | severity_text |
+|-------|----------------|---------------|
+| trace | 1 | `TRACE` |
+| debug | 5 | `DEBUG` |
+| info | 9 | `INFO` |
+| warn | 13 | `WARN` |
+| error | 17 | `ERROR` |
+| fatal | 21 | `FATAL` |
+
+### Log-to-Trace Correlation
+
+Every log entry includes `trace_id` and `span_id` for correlation with active traces. This enables jumping from a log entry in Loki directly to the corresponding trace in Tempo.
+
+**Resolution priority:**
+1. Explicit `trace_id`/`span_id` passed as keyword arguments
+2. Active span from OpenTelemetry context (automatic)
+
+### Example OTel-Compliant Log Entry
+
+```json
+{
+  "timestamp": "2025-01-15T10:30:00.000000+00:00",
+  "timestamp_unix_nano": 1736935800000000000,
+  "severity_number": 9,
+  "severity_text": "INFO",
+  "body": "task.status_changed",
+  "event": "task.status_changed",
+  "service": "contextcore",
+  "project_id": "my-project",
+  "task_id": "PROJ-123",
+  "from_status": "todo",
+  "to_status": "in_progress",
+  "trace_id": "0af7651916cd43dd8448eb211c80319c",
+  "span_id": "b7ad6b7169203331"
+}
+```
+
+### LogQL Queries Using OTel Fields
+
+```logql
+# Filter by severity (only warnings and errors)
+{service="contextcore"} | json | severity_number >= 13
+
+# Correlate logs with a specific trace
+{service="contextcore"} | json | trace_id = "0af7651916cd43dd8448eb211c80319c"
+
+# Error events with trace context for drill-down
+{service="contextcore"} | json | severity_text = "ERROR"
+| line_format "{{.body}} trace={{.trace_id}} span={{.span_id}}"
+```
 
 ---
 
@@ -857,8 +982,11 @@ Emitted when task progress changes. Contains:
 
 ```json
 {
-  "timestamp": "2024-01-15T10:30:00Z",
-  "level": "info",
+  "timestamp": "2025-01-15T10:30:00.000000+00:00",
+  "timestamp_unix_nano": 1736935800000000000,
+  "severity_number": 9,
+  "severity_text": "INFO",
+  "body": "task.progress_updated",
   "event": "task.progress_updated",
   "service": "contextcore",
   "project_id": "my-project",
@@ -868,7 +996,9 @@ Emitted when task progress changes. Contains:
   "source": "subtask",
   "subtask_completed": 3,
   "subtask_count": 5,
-  "sprint_id": "sprint-3"
+  "sprint_id": "sprint-3",
+  "trace_id": "0af7651916cd43dd8448eb211c80319c",
+  "span_id": "b7ad6b7169203331"
 }
 ```
 

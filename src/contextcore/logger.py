@@ -28,8 +28,11 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+from opentelemetry import trace
 
 # Configure structured logger for Loki
 _loki_logger = logging.getLogger("contextcore.tasks")
@@ -72,6 +75,17 @@ class TaskLogger:
         self.extra_labels = extra_labels or {}
         self._logger = _loki_logger
 
+    # OTel severity number mapping (RFC 5424 aligned)
+    # See: https://opentelemetry.io/docs/specs/otel/logs/data-model/#severity-fields
+    _SEVERITY_NUMBER = {
+        "trace": 1,
+        "debug": 5,
+        "info": 9,
+        "warn": 13,
+        "error": 17,
+        "fatal": 21,
+    }
+
     def _emit(
         self,
         event: str,
@@ -86,7 +100,15 @@ class TaskLogger:
         **extra_fields: Any,
     ) -> None:
         """
-        Emit a structured log entry.
+        Emit a structured log entry following OTel log data model.
+
+        Includes OTel-standard fields:
+        - timestamp: ISO 8601 for human readability
+        - timestamp_unix_nano: Nanoseconds since epoch (OTel standard)
+        - severity_number: Integer 1-24 per OTel/RFC 5424 mapping
+        - severity_text: Uppercase level string
+        - body: Log message (event name)
+        - trace_id/span_id: Correlation with active trace context
 
         Args:
             event: Event type (e.g., "task.created")
@@ -100,14 +122,26 @@ class TaskLogger:
             trigger: How event was triggered (manual, webhook, sync)
             **extra_fields: Event-specific fields
         """
-        entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "level": level,
+        now = datetime.now(timezone.utc)
+
+        entry: Dict[str, Any] = {
+            # Timestamps: ISO for readability + nanos for OTel compliance
+            "timestamp": now.isoformat(),
+            "timestamp_unix_nano": int(now.timestamp() * 1_000_000_000),
+            # OTel severity fields
+            "severity_number": self._SEVERITY_NUMBER.get(level, 9),
+            "severity_text": level.upper(),
+            # Body: the log message / event name
+            "body": event,
+            # Legacy field preserved for backward compatibility
             "event": event,
             "service": self.service_name,
             "project_id": self.project,
             "task_id": task_id,
         }
+
+        # Trace context correlation (OTel log-to-trace linking)
+        self._add_trace_context(entry, extra_fields)
 
         if task_type:
             entry["task_type"] = task_type
@@ -120,8 +154,10 @@ class TaskLogger:
             entry["actor_type"] = actor_type
         entry["trigger"] = trigger
 
-        # Add extra fields
-        entry.update(extra_fields)
+        # Add extra fields (excluding trace context already handled)
+        for k, v in extra_fields.items():
+            if k not in ("trace_id", "span_id"):
+                entry[k] = v
 
         # Add custom labels
         if self.extra_labels:
@@ -136,6 +172,33 @@ class TaskLogger:
             self._logger.warning(log_line)
         else:
             self._logger.info(log_line)
+
+    def _add_trace_context(
+        self,
+        entry: Dict[str, Any],
+        extra_fields: Dict[str, Any],
+    ) -> None:
+        """
+        Add trace_id and span_id to a log entry for log-to-trace correlation.
+
+        Priority:
+        1. Explicit trace_id/span_id passed in extra_fields
+        2. Active span from opentelemetry context
+        """
+        # Check for explicitly passed trace context
+        if "trace_id" in extra_fields and "span_id" in extra_fields:
+            entry["trace_id"] = extra_fields["trace_id"]
+            entry["span_id"] = extra_fields["span_id"]
+            return
+
+        # Fall back to active span context
+        span = trace.get_current_span()
+        ctx = span.get_span_context()
+        if ctx and ctx.trace_id != 0:
+            entry["trace_id"] = format(ctx.trace_id, "032x")
+            entry["span_id"] = format(ctx.span_id, "016x")
+            if ctx.trace_flags:
+                entry["trace_flags"] = int(ctx.trace_flags)
 
     def log_task_created(
         self,
