@@ -53,13 +53,54 @@ class HandoffPriority(str, Enum):
 
 
 class HandoffStatus(str, Enum):
-    """Handoff lifecycle states."""
+    """Handoff lifecycle states.
+
+    Includes A2A-aligned states for richer handoff coordination.
+    """
+    # Core states
     PENDING = "pending"
     ACCEPTED = "accepted"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
+    # A2A-aligned states
+    INPUT_REQUIRED = "input_required"  # Agent needs clarification
+    CANCELLED = "cancelled"            # Client-requested termination
+    REJECTED = "rejected"              # Agent refused task
+
+    def is_terminal(self) -> bool:
+        """Return True if this is a terminal (final) state."""
+        return self in (
+            HandoffStatus.COMPLETED,
+            HandoffStatus.FAILED,
+            HandoffStatus.TIMEOUT,
+            HandoffStatus.CANCELLED,
+            HandoffStatus.REJECTED,
+        )
+
+    def is_active(self) -> bool:
+        """Return True if this is an active (non-terminal) state."""
+        return self in (
+            HandoffStatus.PENDING,
+            HandoffStatus.ACCEPTED,
+            HandoffStatus.IN_PROGRESS,
+            HandoffStatus.INPUT_REQUIRED,
+        )
+
+    def can_transition_to(self, target: "HandoffStatus") -> bool:
+        """Check if transitioning to target state is valid."""
+        allowed = _HANDOFF_TRANSITIONS.get(self.value, set())
+        return target.value in allowed
+
+
+# Valid state transitions (module-level to avoid Enum member conflicts)
+_HANDOFF_TRANSITIONS: dict[str, set[str]] = {
+    "pending": {"accepted", "rejected", "cancelled"},
+    "accepted": {"in_progress", "cancelled"},
+    "in_progress": {"input_required", "completed", "failed", "cancelled"},
+    "input_required": {"in_progress", "completed", "failed", "cancelled"},
+}
 
 
 @dataclass
@@ -322,11 +363,7 @@ class HandoffManager:
         while time.time() - start < timeout_s:
             result = self.get_handoff_status(handoff_id)
 
-            if result.status in (
-                HandoffStatus.COMPLETED,
-                HandoffStatus.FAILED,
-                HandoffStatus.TIMEOUT,
-            ):
+            if result.status.is_terminal():
                 return result
 
             time.sleep(poll_s)

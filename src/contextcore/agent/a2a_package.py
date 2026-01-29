@@ -31,10 +31,10 @@ Example Client:
         print(result)
 """
 
-from .task_adapter import TaskAdapter, TaskState
-from .message_handler import A2AMessageHandler, A2AErrorCode
-from .server import A2AServer, create_a2a_server
-from .client import A2AClient, A2AError
+from contextcore.agent.a2a_adapter import TaskAdapter, TaskState
+from contextcore.agent.a2a_messagehandler import A2AMessageHandler, A2AErrorCode
+from contextcore.agent.a2a_server import A2AServer, create_a2a_server
+from contextcore.agent.a2a_client import A2AClient, A2AError
 
 __all__ = [
     "TaskAdapter",
@@ -63,7 +63,8 @@ from typing import Dict, Any
 
 import click
 
-from contextcore.a2a import create_a2a_server, A2AClient, A2AError
+from contextcore.agent.a2a_server import create_a2a_server
+from contextcore.agent.a2a_client import A2AClient, A2AError
 
 
 @click.group("a2a")

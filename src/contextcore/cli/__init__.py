@@ -56,6 +56,9 @@ from .graph import graph
 # TUI commands
 from .tui import tui
 
+# Discovery commands (from discovery module)
+from contextcore.discovery import discovery_group
+
 
 @click.group()
 @click.version_option()
@@ -98,6 +101,9 @@ main.add_command(graph)
 
 # TUI command group
 main.add_command(tui)
+
+# Discovery command group
+main.add_command(discovery_group, name="discovery")
 
 
 if __name__ == "__main__":
