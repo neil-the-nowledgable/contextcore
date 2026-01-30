@@ -492,25 +492,229 @@ benefits:
       - "Results aggregated without manual stitching"
       - "Context shared between agents automatically"
 
+  # ============================================================================
+  # CATEGORY: VISIBILITY (Gaps)
+  # ============================================================================
+
+  - benefit_id: visibility.agent_insights
+    name: "Agent Decision Visibility"
+    value_statement: "Users can browse AI agent decisions and reasoning in dashboards so they understand what agents decided and why without reading transcripts"
+
+    personas:
+      - persona_id: developer
+        pain_point: "I can't see what Claude decided in previous sessions without reading transcripts"
+        value_received: "Dashboard showing all agent decisions, lessons, recommendations with evidence links"
+        importance: high
+      - persona_id: engineering_leader
+        pain_point: "I have no visibility into what AI agents are doing across projects"
+        value_received: "Portfolio-level view of agent activity, decisions, and confidence scores"
+        importance: high
+      - persona_id: ai_agent
+        pain_point: "My decisions are in trace data but humans can't easily browse them"
+        value_received: "Decisions surfaced in Grafana dashboards for human review"
+        importance: medium
+
+    measurable_outcome: "Agent decisions browsable in <10 seconds vs reading transcript logs"
+    measurement_method: "Time to find a specific agent decision from a prior session"
+    baseline: "Read chat transcripts or grep Tempo raw spans manually"
+
+    origin:
+      type: agent_insight
+      ref: "Phase 4 Unified Alignment — gen_ai.* attributes emitted but no dashboard"
+      date: 2026-01-29
+
+    delivered_by: []  # GAP
+    delivery_status: gap
+
+    priority: high
+    effort_estimate: small
+
+    functional_requirements:
+      - id: FR-410
+        description: "Grafana dashboard querying gen_ai.* spans from Tempo"
+        type: presentation
+      - id: FR-411
+        description: "CLI commands for browsing and searching agent insights"
+        type: presentation
+
+    acceptance_criteria:
+      - "Dashboard shows agent insights with type, confidence, summary"
+      - "Filterable by agent_id, project_id, insight.type, time range"
+      - "Drill-down from insight to supporting evidence traces"
+      - "CLI returns insights matching filters in table and JSON format"
+
+  # ============================================================================
+  # CATEGORY: QUALITY
+  # ============================================================================
+
+  - benefit_id: quality.deliverable_verification
+    name: "Deliverable Verification"
+    value_statement: "Users can trust task 'done' status because deliverables are verified, not just execution completion"
+
+    personas:
+      - persona_id: developer
+        pain_point: "Tasks show 'done' but expected outputs weren't actually created"
+        value_received: "Automatic verification that expected deliverables exist after task completion"
+        importance: high
+      - persona_id: project_manager
+        pain_point: "Status shows complete but I can't verify what was actually delivered"
+        value_received: "Dashboard distinguishing verified completions from unverified"
+        importance: critical
+
+    measurable_outcome: "100% of completed tasks have deliverable verification status"
+    measurement_method: "Ratio of verified completions to total completions"
+    baseline: "Task 'done' = execution ran, no deliverable check"
+
+    origin:
+      type: agent_insight
+      ref: "P2 risk in .contextcore.yaml — execution ≠ completion discovered via phase tasks"
+      date: 2026-01-20
+
+    delivered_by: []  # GAP
+    delivery_status: gap
+
+    priority: high
+    effort_estimate: medium
+
+    functional_requirements:
+      - id: FR-510
+        description: "Define deliverable types and expected output schema for tasks"
+        type: data
+      - id: FR-511
+        description: "Post-completion hooks verifying deliverables exist"
+        type: automation
+      - id: FR-412
+        description: "Dashboard panels showing verified vs unverified completions"
+        type: presentation
+
+    acceptance_criteria:
+      - "Tasks can declare expected deliverables (files, artifacts, test results)"
+      - "Completion triggers automatic deliverable verification"
+      - "Verification results emitted as span events"
+      - "Dashboard distinguishes verified from unverified completions"
+
+  # ============================================================================
+  # CATEGORY: DEVELOPER EXPERIENCE
+  # ============================================================================
+
+  - benefit_id: devex.dependency_validation
+    name: "Automated Dependency Validation"
+    value_statement: "Users can catch missing dependencies before deployment so they avoid 'works on my machine' failures"
+
+    personas:
+      - persona_id: developer
+        pain_point: "Dashboard references a Grafana plugin that isn't installed—discovered at deploy time"
+        value_received: "Pre-commit and CI catch undeclared dependencies before merge"
+        importance: high
+      - persona_id: operator
+        pain_point: "Deployment fails because implicit dependencies weren't declared"
+        value_received: "Runtime verification reports missing dependencies with install instructions"
+        importance: high
+
+    measurable_outcome: "Zero deploy-time dependency surprises"
+    measurement_method: "Count of deployment failures due to undeclared dependencies"
+    baseline: "Dependencies discovered only at deploy time (P2 risk)"
+
+    origin:
+      type: incident
+      ref: "Beaver dashboard referenced yesoreyeram-infinity-datasource plugin not configured"
+      date: 2026-01-20
+
+    delivered_by: []  # GAP
+    delivery_status: gap
+
+    priority: medium
+    effort_estimate: small
+
+    functional_requirements:
+      - id: FR-520
+        description: "Pre-commit and CI checks validating dependency manifests"
+        type: automation
+      - id: FR-521
+        description: "Extend contextcore install verify to check external dependencies"
+        type: automation
+
+    acceptance_criteria:
+      - "Pre-commit hook warns on undeclared dependencies"
+      - "CI validates dependency manifest completeness"
+      - "contextcore install verify reports missing dependencies"
+      - "Missing dependency output includes install instructions"
+
+  - benefit_id: devex.codegen_health
+    name: "Code Generation Health Monitoring"
+    value_statement: "Users can monitor LLM code generation quality so they catch truncation and quality issues before they compound"
+
+    personas:
+      - persona_id: developer
+        pain_point: "Generated code was silently truncated, causing downstream failures"
+        value_received: "Dashboard showing truncation rate, decomposition frequency, verification results"
+        importance: medium
+      - persona_id: ai_agent
+        pain_point: "I can't tell if my output was truncated or incomplete"
+        value_received: "Pre-flight size estimation prevents generation of over-limit outputs"
+        importance: high
+
+    measurable_outcome: "Truncation rate <1%, zero undetected truncations"
+    measurement_method: "gen_ai.code.truncated telemetry from code generation spans"
+    baseline: "Truncation discovered only when generated code fails to compile"
+
+    origin:
+      type: agent_insight
+      ref: "Span-based generation contracts design — proactive truncation prevention"
+      date: 2026-01-22
+
+    delivered_by: []  # GAP
+    delivery_status: gap
+
+    priority: low
+    effort_estimate: medium
+
+    functional_requirements:
+      - id: FR-420
+        description: "Grafana dashboard monitoring code generation health metrics"
+        type: presentation
+      - id: FR-530
+        description: "Span-based generation contracts with size constraints in CodeGenerationHandoff"
+        type: automation
+
+    acceptance_criteria:
+      - "Dashboard shows truncation rate, decomposition frequency, size accuracy"
+      - "Size constraints enforced before code generation"
+      - "Decomposition triggered for over-limit requests"
+      - "Truncation events emitted as telemetry"
+
 # ==============================================================================
 # GAP SUMMARY
 # ==============================================================================
 
 gap_summary:
-  total_benefits: 10
-  delivered: 7
+  total_benefits: 14
+  delivered: 6
   partial: 2
-  gaps: 2
+  gaps: 6
 
   gaps_by_priority:
     high:
       - benefit_id: time.status_compilation_eliminated
         effort: medium
         recommendation: "Build on existing dashboard infrastructure"
+      - benefit_id: visibility.agent_insights
+        effort: small
+        recommendation: "Quick win — gen_ai.* attributes already emitted, just needs dashboard"
+      - benefit_id: quality.deliverable_verification
+        effort: medium
+        recommendation: "Addresses P2 risk — execution ≠ completion"
     medium:
       - benefit_id: interop.aos_compliance
         effort: medium
         recommendation: "Implement in phases: AOS events first, MCP second"
+      - benefit_id: devex.dependency_validation
+        effort: small
+        recommendation: "Quick win — dependency manifest pattern already documented"
+    low:
+      - benefit_id: devex.codegen_health
+        effort: medium
+        recommendation: "Defer until code generation volume increases"
 
   partial_by_priority:
     medium:
@@ -524,6 +728,18 @@ gap_summary:
 # ==============================================================================
 
 changelog:
+  - version: "1.3.0"
+    date: "2026-01-29"
+    changes:
+      - "Added 4 new gap benefits from logical next steps analysis"
+      - "New category: QUALITY (quality.deliverable_verification)"
+      - "New category: DEVELOPER EXPERIENCE (devex.dependency_validation, devex.codegen_health)"
+      - "visibility.agent_insights: Agent decision dashboard (high priority, small effort)"
+      - "quality.deliverable_verification: Task deliverable verification (high priority, medium effort)"
+      - "devex.dependency_validation: Automated dependency checks (medium priority, small effort)"
+      - "devex.codegen_health: Code generation monitoring (low priority, medium effort)"
+      - "14 total benefits: 6 delivered, 2 partial, 6 gaps"
+      - "Fixed delivered count: 6 (was incorrectly 7)"
   - version: "1.2.0"
     date: "2026-01-29"
     changes:
