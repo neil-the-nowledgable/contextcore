@@ -3,11 +3,11 @@
     "list": []
   },
   "uid": "contextcore-workflow",
-  "title": "[RABBIT] ContextCore Workflow Manager",
+  "title": "ContextCore Workflow Manager",
   "description": "View project tasks and workflow executions from Tempo traces",
   "tags": [
     "contextcore",
-    "rabbit",
+    "core",
     "workflow"
   ],
   "editable": true,
@@ -118,6 +118,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
+          "tableType": "spans",
           "query": "{resource.project.id != \"\"} | select(resource.project.id)",
           "limit": 100,
           "refId": "A"
@@ -217,6 +218,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
+          "tableType": "spans",
           "query": "{resource.project.id = \"$project\"} | select(span.task.id, span.task.title, span.task.status, span.task.type)",
           "limit": 50,
           "refId": "A"
@@ -331,6 +333,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
+          "tableType": "spans",
           "query": "{name =~ \"workflow.*\"} | select(resource.project.id, span.workflow.id, span.workflow.status, span.workflow.type, duration)",
           "limit": 50,
           "refId": "A"
@@ -739,6 +742,7 @@
             "uid": "tempo"
           },
           "queryType": "traceql",
+          "tableType": "spans",
           "query": "{resource.service.name=\"lead-contractor\" && name=\"workflow\" && resource.project.id=\"$project\"} | select(span.workflow.run_id, span.task.title, span.workflow.features_processed, span.workflow.features_succeeded, span.workflow.features_failed, duration, span.contextcore.cost.usd, status)",
           "limit": 20,
           "refId": "A"
