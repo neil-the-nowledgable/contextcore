@@ -21,7 +21,7 @@ metadata:
 # SOURCE OF TRUTH - ContextCore Provisioning Dashboards
 # =============================================================================
 source_of_truth:
-  location: "/Users/neilyashinsky/Documents/dev/ContextCore/grafana/provisioning/dashboards"
+  location: "./grafana/provisioning/dashboards"
   description: "Canonical dashboard definitions organized by expansion pack"
 
   dashboards:
@@ -140,7 +140,7 @@ source_of_truth:
 # K8s Observability Dashboards (should mirror source of truth)
 # =============================================================================
 k8s_dashboards:
-  location: "/Users/neilyashinsky/Documents/dev/ContextCore/k8s/observability/dashboards"
+  location: "./k8s/observability/dashboards"
   description: "Dashboards deployed to Kind cluster via ConfigMap"
   sync_status: "NEEDS_SYNC"
 
@@ -207,7 +207,7 @@ k8s_dashboards:
 # Deploy Observability Dashboards (should mirror source of truth)
 # =============================================================================
 deploy_dashboards:
-  location: "/Users/neilyashinsky/Documents/Deploy/observability/grafana/dashboards/contextcore"
+  location: "$DEPLOY_DIR/observability/grafana/dashboards/contextcore"
   description: "Dashboards in Deploy directory (uses password adminadminadmin)"
   sync_status: "NEEDS_SYNC"
 
@@ -263,7 +263,7 @@ deploy_dashboards:
 # Owl Plugin Development Dashboards
 # =============================================================================
 owl_plugin_dashboards:
-  location: "/Users/neilyashinsky/Documents/dev/ContextCore/contextcore-owl/plugins-new"
+  location: "./contextcore-owl/plugins-new"
   description: "Development dashboards for Grafana plugin testing"
 
   files:
@@ -282,14 +282,14 @@ task_data:
   description: "Task JSON files that can be loaded into Tempo for dashboard data"
 
   ready_for_tempo:
-    - file: "/Users/neilyashinsky/Documents/dev/ContextCore/plans/beaver-lead-contractor-tasks.json"
+    - file: "./plans/beaver-lead-contractor-tasks.json"
       project_id: "beaver-lead-contractor"
       task_count: 11
       description: "BLC integration tasks - Lead Contractor SDK workflow"
       loaded_to_tempo: true
       loaded_at: "2026-01-26"
 
-    - file: "/Users/neilyashinsky/Documents/dev/ContextCore/plans/dashboard-persistence-tasks.json"
+    - file: "./plans/dashboard-persistence-tasks.json"
       project_id: "dashboard-persistence"
       task_count: 52
       description: "Dashboard organization and data persistence architecture tasks"
@@ -297,7 +297,7 @@ task_data:
       loaded_at: "2026-01-26"
 
   semantic_convention_tasks:
-    location: "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes"
+    location: "./semantic-convention-fixes"
     description: "Individual task result files from semantic convention refactoring"
     files:
       - "task-1-namespace-refactoring.json"
@@ -458,11 +458,11 @@ demo_data:
   description: "Generated demo data for testing"
 
   files:
-    - file: "/Users/neilyashinsky/Documents/dev/ContextCore/test_demo_output/demo_spans.json"
+    - file: "./test_demo_output/demo_spans.json"
       description: "Demo span data for Tempo"
       format: "OTel spans JSON"
 
-    - file: "/Users/neilyashinsky/Documents/dev/ContextCore/test_demo_output/demo_logs.json"
+    - file: "./test_demo_output/demo_logs.json"
       description: "Demo log data for Loki"
       format: "Structured logs JSON"
 
@@ -471,7 +471,7 @@ demo_data:
 # =============================================================================
 backups:
   contextcore_backups:
-    location: "/Users/neilyashinsky/Documents/dev/ContextCore/backups"
+    location: "./backups"
     entries:
       - dir: "20260117-184139"
         date: "2026-01-17"
@@ -486,7 +486,7 @@ backups:
           - "manifest.json"
 
   deploy_backups:
-    location: "/Users/neilyashinsky/Documents/Deploy/backups"
+    location: "$DEPLOY_DIR/backups"
     description: "Timestamped backups from Deploy stack"
     entries:
       - "20260118-210329"
@@ -522,7 +522,7 @@ docker_volumes:
 # Generated Code Results (Dashboard-related)
 # =============================================================================
 generated_results:
-  location: "/Users/neilyashinsky/Documents/dev/ContextCore/generated/phase3"
+  location: "./generated/phase3"
   description: "Lead Contractor generated code results"
 
   dashboard_persistence:

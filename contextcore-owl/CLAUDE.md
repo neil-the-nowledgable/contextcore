@@ -68,7 +68,7 @@ kubectl -n observability rollout restart deployment/grafana
 # View Grafana at http://localhost:3000 (admin/admin)
 ```
 
-**Kind cluster mounts** (defined in `/Users/neilyashinsky/Documents/Deploy/kind-cluster.yaml`):
+**Kind cluster mounts** (defined in `$DEPLOY_DIR/kind-cluster.yaml`):
 - Host: `contextcore-grafana/grafana/plugins/*` → Container: `/plugins/contextcore/*`
 - Grafana deployment uses hostPath volumes to mount from `/plugins/contextcore/*`
 - **Note**: Kind config still references `contextcore-grafana/` (legacy name before rename to `contextcore-owl`)

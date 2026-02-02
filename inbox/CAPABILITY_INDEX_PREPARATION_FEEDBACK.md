@@ -132,7 +132,7 @@ Using the prompt now would produce a capability index based on assumptions, not 
 1. **No incremental validation** - The 9 phases assume waterfall execution; capability discovery should be iterative
 2. **No ownership** - Who fills in each section? When?
 3. **No exit criteria** - When is "preparation" done? What's the minimum viable preparation?
-4. **Reference to external file** - Points to `/Users/neilyashinsky/Documents/craft/capability-index/PREPARATION.md` which may not exist or be accessible
+4. **Reference to external file** - Points to the craft repo's `capability-index/PREPARATION.md` which may not exist or be accessible
 
 ---
 

@@ -5,9 +5,9 @@
     "name": "Event Standardization",
     "description": "\nStandardize span events and event attributes following OTel conventions.\n\n1. Define events in YAML:\n   - Create model/task/events.yaml for task lifecycle events\n   - Create model/sprint/events.yaml for sprint events\n\n2. Namespace event attributes:\n   - from/to \u2192 io.contextcore.task.status.from, io.contextcore.task.status.to\n   - reason \u2192 io.contextcore.task.blocked.reason\n   - blocker_id \u2192 io.contextcore.task.blocked.blocker_id\n   - author/text \u2192 io.contextcore.task.comment.author, io.contextcore.task.comment.text\n\n3. Align log event names:\n   - Use LogRecord EventName for OTLP logs\n   - Use otel.event.name for JSON logs (Loki)\n\nFiles to update:\n- src/contextcore/tracker.py (span.add_event calls)\n- src/contextcore/logger.py (structured log format)\n\nCreate YAML event definitions following model/session/events.yaml pattern.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
-      "reference_file": "/Users/neilyashinsky/.cursor/worktrees/1/ryc/model/session/events.yaml",
-      "output_directory": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/model/task"
+      "target_directory": ".",
+      "reference_file": "OTel semconv model/session/events.yaml (external)",
+      "output_directory": "./semantic-convention-fixes/model/task"
     },
     "output_format": "YAML event definitions and Python code changes"
   },

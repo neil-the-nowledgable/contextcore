@@ -26,7 +26,7 @@ Create a bash library `install-state.sh` that provides functions for managing
 installation state in a JSON file, enabling resume and repair capabilities.
 
 ## Context
-- This is for the ContextCore project at /Users/neilyashinsky/Documents/dev/ContextCore
+- This is for the ContextCore project (repository root)
 - The script should be placed at scripts/install-state.sh
 - State file location: ~/.contextcore/install-state.json
 - Must work with bash 4.0+ and require only jq as dependency

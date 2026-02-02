@@ -5,7 +5,7 @@
     "name": "Fix Array Attribute Types",
     "description": "\nFix all array attributes that are stored as comma-separated strings to use proper array types.\n\nIssues to fix:\n1. skill.capabilities - currently \",\".join(manifest.capability_refs) \u2192 should be List[str]\n2. value.personas_covered - currently \",\".join(manifest.personas_covered) \u2192 should be List[str]\n3. value.channels_supported - currently \",\".join(...) \u2192 should be List[str]\n4. skill.project_refs - currently \",\".join(...) \u2192 should be List[str]\n5. Any other comma-separated string arrays\n\nFiles to update:\n- src/contextcore/value/emitter.py (lines ~111, ~130, ~134)\n- src/contextcore/skill/emitter.py\n- Any other files with similar patterns\n\nEnsure OTel SDK properly handles array types.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
+      "target_directory": ".",
       "files": [
         "src/contextcore/value/emitter.py",
         "src/contextcore/skill/emitter.py"

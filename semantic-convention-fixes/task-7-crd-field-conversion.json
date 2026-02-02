@@ -5,7 +5,7 @@
     "name": "CRD Field Conversion",
     "description": "\nEnsure CRD camelCase fields are converted to snake_case for telemetry export.\n\nCRD fields to convert:\n- agentId \u2192 agent.id or io.contextcore.agent.id\n- traceId \u2192 trace.id (standard OTel)\n- metricsInterval \u2192 metrics.interval or io.contextcore.metrics.interval\n- Any other camelCase fields\n\nFiles to check:\n- src/contextcore/models.py\n- src/contextcore/models_v2.py\n- src/contextcore/crd_helpers.py\n\nEnsure conversion happens when CRD fields are exported as telemetry attributes.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
+      "target_directory": ".",
       "files": [
         "src/contextcore/models.py",
         "src/contextcore/models_v2.py",

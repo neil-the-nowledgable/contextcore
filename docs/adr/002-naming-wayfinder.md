@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-01-28
-**Author:** Neil Yashinsky
+**Author:** Force Multiplier Labs
 **Codename:** Project Muad'Dib
 
 ---
@@ -142,8 +142,8 @@ Core ideas under consideration:
 ## References
 
 - Frank Herbert, *Dune* (1965) — Muad'Dib as "the one who points the way"
-- [Language Model 1.0 Manifesto](/Users/neilyashinsky/Documents/FMLs/marketing/Campaigns/languagemodel1oh/MANIFESTO_Language_Model_1.0.md)
-- [ContextCore Harbor Tour](/Users/neilyashinsky/Documents/dev/contextcore-dot-me/ecosystem/harbor-tour.html)
+- Language Model 1.0 Manifesto (see FMLs marketing materials)
+- ContextCore Harbor Tour (see contextcore-dot-me repo)
 - [Expansion Pack Naming Convention](./docs/NAMING_CONVENTION.md)
 
 ---

@@ -84,7 +84,7 @@ Build the main Textual application class that serves as the foundation for the T
 with screen routing, theming, and global key bindings.
 
 ## Context
-- This is for ContextCore at /Users/neilyashinsky/Documents/dev/ContextCore
+- This is for the ContextCore project (repository root)
 - File location: src/contextcore/tui/app.py
 - Uses Textual framework (textual>=0.47.0)
 - Should work with Python 3.9+

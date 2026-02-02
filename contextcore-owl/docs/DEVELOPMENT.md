@@ -30,7 +30,7 @@ open http://localhost:3000
 
 ## Kind Cluster Deployment
 
-Plugins are deployed via Kind host mounts defined in `/Users/neilyashinsky/Documents/Deploy/kind-cluster.yaml`:
+Plugins are deployed via Kind host mounts defined in `$DEPLOY_DIR/kind-cluster.yaml`:
 
 ```yaml
 extraMounts:
@@ -44,7 +44,7 @@ to mount these into `/var/lib/grafana/plugins/`.
 
 If Kind cluster doesn't have the mounts yet, recreate it:
 ```bash
-cd /Users/neilyashinsky/Documents/Deploy
+cd $DEPLOY_DIR
 ./scripts/create-cluster.sh --delete && ./scripts/create-cluster.sh
 ```
 

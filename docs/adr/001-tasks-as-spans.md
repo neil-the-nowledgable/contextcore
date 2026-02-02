@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-01-01 (retroactively documented 2026-01-28)
-**Author:** Neil Yashinsky
+**Author:** Force Multiplier Labs
 **Confidence:** 0.95
 
 ---

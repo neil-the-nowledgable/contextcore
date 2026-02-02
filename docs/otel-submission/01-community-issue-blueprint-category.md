@@ -91,7 +91,7 @@ Key patterns:
 
 ### Leadership
 
-- **Proposer**: Neil Yashinsky
+- **Proposer**: Force Multiplier Labs
 - **Sponsorship Sought**: End-User SIG, DevEx SIG
 
 ### Related Work

@@ -5,12 +5,12 @@
     "name": "Create Semantic Convention Registry Files",
     "description": "\nCreate YAML registry files for all custom attributes following OTel semantic convention format.\n\nCreate registry files:\n- model/task/registry.yaml - for task management attributes\n- model/sprint/registry.yaml - for sprint attributes\n- model/project/registry.yaml - for project attributes\n- model/agent/registry.yaml - for agent-related attributes\n- model/business/registry.yaml - for business context attributes\n- model/requirement/registry.yaml - for requirement/SLO attributes\n\nEach file should include:\n- Attribute definitions with brief, note, examples, stability\n- Proper types (string, int, array, enum, etc.)\n- Stability level (development initially)\n- Requirement levels where applicable\n\nFollow the pattern from model/http/registry.yaml and model/service/registry.yaml.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
+      "target_directory": ".",
       "reference_files": [
-        "/Users/neilyashinsky/.cursor/worktrees/1/ryc/model/http/registry.yaml",
-        "/Users/neilyashinsky/.cursor/worktrees/1/ryc/model/service/registry.yaml"
+        "OTel semconv model/http/registry.yaml (external)",
+        "OTel semconv model/service/registry.yaml (external)"
       ],
-      "output_directory": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/model"
+      "output_directory": "./semantic-convention-fixes/model"
     },
     "output_format": "YAML registry files following OTel semantic convention format"
   },

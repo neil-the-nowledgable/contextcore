@@ -545,7 +545,7 @@ Each index is usable independently. Validate each before proceeding.
 
 ---
 
-*This preparation guide is specific to ContextCore. For the general capability index preparation guide, see `/Users/neilyashinsky/Documents/craft/capability-index/PREPARATION.md`.*
+*This preparation guide is specific to ContextCore. For the general capability index preparation guide, see the craft repo's `capability-index/PREPARATION.md`.*
 
 ---
 

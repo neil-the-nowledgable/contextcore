@@ -9,7 +9,7 @@ This guide walks through a complete teardown and fresh installation of the Conte
 - All commands run from the **project root directory**:
 
 ```bash
-cd /Users/neilyashinsky/Documents/dev/ContextCore
+cd <project-root>  # e.g., ~/Documents/dev/ContextCore
 ```
 
 ---
@@ -34,7 +34,7 @@ Both target the `observability` namespace in the `o11y-dev` Kind cluster. Use th
 ```bash
 # Ensure you're in the project root
 pwd
-# Should show: /Users/neilyashinsky/Documents/dev/ContextCore
+# Should show your ContextCore project root
 
 # 1. Stop any running containers
 make down
@@ -245,7 +245,7 @@ Copy-paste ready sequence for a full reinstall:
 
 ```bash
 # Navigate to project root
-cd /Users/neilyashinsky/Documents/dev/ContextCore
+cd <project-root>  # e.g., ~/Documents/dev/ContextCore
 
 # Teardown
 make down

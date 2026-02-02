@@ -5,7 +5,7 @@
     "name": "Resource Attribute Restructuring",
     "description": "\nMove project-level attributes from span-level to resource-level where appropriate.\n\nChanges:\n- project.id \u2192 move to resource level as io.contextcore.project.id\n- project.name \u2192 move to resource level as io.contextcore.project.name\n- business.criticality \u2192 move to resource level as io.contextcore.business.criticality\n\nKeep task-specific attributes at span level:\n- task.status, task.assignee, etc. remain as span attributes\n\nFiles to update:\n- src/contextcore/tracker.py (Resource.create calls)\n- src/contextcore/metrics.py (Resource.create calls)\n- src/contextcore/detector.py (resource attribute mapping)\n\nEnsure clear separation between resource and span attributes.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
+      "target_directory": ".",
       "files": [
         "src/contextcore/tracker.py",
         "src/contextcore/metrics.py",

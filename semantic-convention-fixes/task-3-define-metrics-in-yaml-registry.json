@@ -5,9 +5,9 @@
     "name": "Define Metrics in YAML Registry",
     "description": "\nCreate semantic convention YAML files for metrics following OTel patterns.\n\nCreate model/task/metrics.yaml with:\n- task.lead_time (histogram, unit: s)\n- task.cycle_time (histogram, unit: s)\n- task.blocked.duration (histogram, unit: s) - renamed from task.blocked_time\n- task.active.count (gauge, unit: {count}) - renamed from task.wip\n- task.completions (counter, unit: {count}) - renamed from task.throughput\n- task.count (gauge, unit: {count}) - renamed from task.count_by_status\n- task.story_points.completed (counter, unit: {points})\n- sprint.story_points.completed (gauge, unit: {points}) - renamed from sprint.velocity\n\nFollow the pattern from model/process/metrics.yaml.\nInclude proper documentation (brief, note, examples, stability).\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
-      "reference_file": "/Users/neilyashinsky/.cursor/worktrees/1/ryc/model/process/metrics.yaml",
-      "output_directory": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes/model/task"
+      "target_directory": ".",
+      "reference_file": "OTel semconv model/process/metrics.yaml (external)",
+      "output_directory": "./semantic-convention-fixes/model/task"
     },
     "output_format": "YAML file following OTel semantic convention format"
   },

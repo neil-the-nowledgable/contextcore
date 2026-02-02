@@ -119,7 +119,7 @@ Key patterns:
 
 ### Leadership
 
-- **Proposer**: Neil Yashinsky
+- **Proposer**: Force Multiplier Labs
 - **Sponsorship Sought**: Gen AI SIG, End-User SIG
 
 ### Related Work

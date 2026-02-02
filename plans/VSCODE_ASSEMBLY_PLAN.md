@@ -477,11 +477,11 @@ ASSEMBLY_FEATURES = [
 
 ```bash
 # Run all assembly tasks
-PYTHONPATH="/Users/neilyashinsky/Documents/dev/startd8-sdk/src:$PYTHONPATH" \
+PYTHONPATH="$STARTD8_SDK_ROOT/src:$PYTHONPATH" \
 python3 scripts/lead_contractor/run_vscode_assembly.py
 
 # Or run individual tasks
-PYTHONPATH="/Users/neilyashinsky/Documents/dev/startd8-sdk/src:$PYTHONPATH" \
+PYTHONPATH="$STARTD8_SDK_ROOT/src:$PYTHONPATH" \
 python3 scripts/lead_contractor/run_vscode_assembly.py --feature 1
 ```
 

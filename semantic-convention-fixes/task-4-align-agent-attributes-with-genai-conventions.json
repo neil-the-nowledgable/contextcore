@@ -5,8 +5,8 @@
     "name": "Align Agent Attributes with GenAI Conventions",
     "description": "\nAlign agent-related attributes with OTel GenAI conventions where applicable.\n\nMapping:\n- agent.id \u2192 gen_ai.agent.id (if proposed) or io.contextcore.agent.id\n- agent.session_id \u2192 gen_ai.conversation.id or session.id\n- agent.type \u2192 gen_ai.agent.type (if proposed) or io.contextcore.agent.type\n- agent.version \u2192 gen_ai.request.model or gen_ai.response.model\n- insight.* \u2192 gen_ai.insight.* (propose to GenAI SIG) or io.contextcore.insight.*\n- handoff.* \u2192 gen_ai.handoff.* (propose to GenAI SIG) or io.contextcore.handoff.*\n\nFiles to update:\n- src/contextcore/agent/insights.py\n- src/contextcore/learning/emitter.py\n- Any other files using agent.* attributes\n\nCreate a migration plan that maintains backward compatibility during transition.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
-      "genai_reference": "/Users/neilyashinsky/.cursor/worktrees/1/ryc/model/gen-ai"
+      "target_directory": ".",
+      "genai_reference": "OTel semconv model/gen-ai (external)"
     },
     "output_format": "Python code changes with migration strategy"
   },

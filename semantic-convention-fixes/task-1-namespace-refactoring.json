@@ -5,9 +5,9 @@
     "name": "Namespace Refactoring",
     "description": "\nRefactor all custom namespaces in ContextCore to use vendor-prefixed namespaces (io.contextcore.*).\n\nCurrent namespaces to refactor:\n- task.* \u2192 io.contextcore.task.*\n- project.* \u2192 io.contextcore.project.*\n- sprint.* \u2192 io.contextcore.sprint.*\n- agent.* \u2192 io.contextcore.agent.* (or gen_ai.agent.* where applicable)\n- business.* \u2192 io.contextcore.business.*\n- requirement.* \u2192 io.contextcore.requirement.*\n- design.* \u2192 io.contextcore.design.*\n- risk.* \u2192 io.contextcore.risk.*\n- skill.* \u2192 io.contextcore.skill.*\n- capability.* \u2192 io.contextcore.capability.*\n- knowledge.* \u2192 io.contextcore.knowledge.*\n- value.* \u2192 io.contextcore.value.*\n- lesson.* \u2192 io.contextcore.lesson.*\n- insight.* \u2192 io.contextcore.insight.* (or gen_ai.insight.*)\n- handoff.* \u2192 io.contextcore.handoff.* (or gen_ai.handoff.*)\n- link.* \u2192 io.contextcore.link.*\n\nFiles to update:\n- src/contextcore/tracker.py\n- src/contextcore/metrics.py\n- src/contextcore/contracts/metrics.py\n- src/contextcore/contracts/types.py\n- src/contextcore/value/emitter.py\n- src/contextcore/skill/emitter.py\n- src/contextcore/agent/insights.py\n- src/contextcore/learning/emitter.py\n- src/contextcore/detector.py\n\nCreate a comprehensive refactoring plan and implement it systematically.\n",
     "context": {
-      "target_directory": "/Users/neilyashinsky/Documents/dev/ContextCore",
-      "analysis_file": "/Users/neilyashinsky/Documents/dev/OTel/semantic-conventions/semantic-conventions/research/CONSOLIDATED-ANALYSIS.md",
-      "output_directory": "/Users/neilyashinsky/Documents/dev/ContextCore/semantic-convention-fixes"
+      "target_directory": ".",
+      "analysis_file": "OTel semconv research/CONSOLIDATED-ANALYSIS.md (external)",
+      "output_directory": "./semantic-convention-fixes"
     },
     "output_format": "Python code changes with before/after examples"
   },

@@ -90,5 +90,5 @@ Based on recent SemConv WG meeting notes, ContextCore touches several active are
 
 ---
 
-**Contact**: Neil Yashinsky
+**Contact**: Force Multiplier Labs
 **Slack**: #otel-semconv-general or #otel-user-sig

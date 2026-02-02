@@ -151,12 +151,12 @@ business:
         Two environments identified - keep separate until merge is complete:
 
         DEV Environment:
-          - Path: /Users/neilyashinsky/Documents/dev/ContextCore
+          - Path: .
           - Password: admin
           - Purpose: Development, newer code
 
         TEST Environment:
-          - Path: /Users/neilyashinsky/Documents/Deploy
+          - Path: $DEPLOY_DIR
           - Password: adminadminadmin
           - Purpose: Testing, stable deployments
 
@@ -164,7 +164,7 @@ business:
         After merge: Consolidate to single source of truth.
       scope:
         - "k8s/observability/"
-        - "/Users/neilyashinsky/Documents/Deploy/observability/"
+        - "$DEPLOY_DIR/observability/"
       lesson: |
         Discovered two deployment directories targeting same Kind cluster namespace:
         - DEV: ContextCore k8s (password: admin)
