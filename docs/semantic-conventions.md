@@ -127,6 +127,33 @@ Original `task.*` attributes are always preserved. The CI/CD attributes are addi
 { span.task.status = "completed" && span.cicd.pipeline.task.type = "story" }
 ```
 
+### Feature Flag Events
+
+ContextCore emits [OTel feature flag evaluation events](https://opentelemetry.io/docs/specs/semconv/feature-flags/feature-flags-events/) whenever a configuration flag is first resolved. This provides an audit trail of which modes were active during a trace.
+
+The following flags are tracked:
+
+| Flag Key | Possible Variants | Controls |
+|----------|------------------|----------|
+| `contextcore.emit_mode` | `dual`, `legacy`, `otel` | GenAI dual-emit mode |
+| `contextcore.cicd_emit` | `true`, `false` | CI/CD attribute emission |
+
+Each event includes a `feature_flag.provider_name` indicating the resolution source:
+
+| Provider | Meaning |
+|----------|---------|
+| `contextcore-env` | Resolved from a `CONTEXTCORE_*` env var |
+| `otel-env` | Resolved from `OTEL_SEMCONV_STABILITY_OPT_IN` |
+| `contextcore-default` | No env var set, using default value |
+
+Events are added to the current span (if one is recording) and emitted as structured logs for Loki ingestion.
+
+**Example Loki query:**
+
+```logql
+{job="contextcore"} | json | feature_flag_key="contextcore.emit_mode"
+```
+
 ### Compat Module
 
 The `contextcore.compat.otel_genai` module provides the dual-emit layer:

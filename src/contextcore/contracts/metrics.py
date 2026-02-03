@@ -164,6 +164,22 @@ class LabelName(str, Enum):
     JOB = "job"
 
 
+class FeatureFlagAttribute(str, Enum):
+    """
+    OTel Feature Flag semantic convention attributes.
+
+    Used when emitting feature flag evaluation events for ContextCore
+    configuration flags (emit mode, CI/CD emit, etc.).
+
+    See: https://opentelemetry.io/docs/specs/semconv/feature-flags/feature-flags-events/
+    """
+
+    KEY = "feature_flag.key"
+    PROVIDER_NAME = "feature_flag.provider_name"
+    RESULT_VARIANT = "feature_flag.result.variant"
+    RESULT_VALUE = "feature_flag.result.value"
+
+
 class CicdLabelName(str, Enum):
     """
     CI/CD pipeline label names (OTel CI/CD semantic conventions).

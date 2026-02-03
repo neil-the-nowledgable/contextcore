@@ -39,6 +39,7 @@ from contextcore.contracts.metrics import (
     MetricName,
     LabelName,
     CicdLabelName,
+    FeatureFlagAttribute,
     EventType,
     ProjectSchema,
     RecordingRuleName,
@@ -179,6 +180,8 @@ __all__ = [
     "GENAI_DURATION_BUCKETS",
     # CI/CD pipeline labels
     "CicdLabelName",
+    # Feature flag attributes
+    "FeatureFlagAttribute",
     # Recording and alert rule contracts
     "RecordingRuleName",
     "AlertRuleName",

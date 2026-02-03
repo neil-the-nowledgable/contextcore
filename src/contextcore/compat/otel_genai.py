@@ -897,7 +897,11 @@ def get_emit_mode() -> EmitMode:
     2. OTEL_SEMCONV_STABILITY_OPT_IN env var (OTel standard)
        - Contains 'gen_ai_latest_experimental' -> EmitMode.OTEL
     3. Default: EmitMode.DUAL
+
+    Emits an OTel feature flag evaluation event on first resolution.
     """
+    from contextcore.compat.otel_feature_flags import emit_feature_flag_event
+
     global _cached_mode
     if _cached_mode is not None:
         return _cached_mode
@@ -907,6 +911,9 @@ def get_emit_mode() -> EmitMode:
     if cc_mode:
         try:
             _cached_mode = EmitMode(cc_mode)
+            emit_feature_flag_event(
+                "contextcore.emit_mode", _cached_mode.value, "contextcore-env",
+            )
             return _cached_mode
         except ValueError:
             warnings.warn(
@@ -922,10 +929,16 @@ def get_emit_mode() -> EmitMode:
         tokens = {t.strip() for t in otel_opt_in.split(",")}
         if "gen_ai_latest_experimental" in tokens:
             _cached_mode = EmitMode.OTEL
+            emit_feature_flag_event(
+                "contextcore.emit_mode", _cached_mode.value, "otel-env",
+            )
             return _cached_mode
 
     # 3. Default
     _cached_mode = EmitMode.DUAL
+    emit_feature_flag_event(
+        "contextcore.emit_mode", _cached_mode.value, "contextcore-default",
+    )
     return _cached_mode
 
 

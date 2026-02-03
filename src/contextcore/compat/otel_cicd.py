@@ -30,7 +30,11 @@ def get_cicd_emit_enabled() -> bool:
     1. CONTEXTCORE_CICD_EMIT env var (explicit, project-specific)
     2. OTEL_SEMCONV_STABILITY_OPT_IN contains "cicd" token
     3. Default: False (disabled)
+
+    Emits an OTel feature flag evaluation event on first resolution.
     """
+    from contextcore.compat.otel_feature_flags import emit_feature_flag_event
+
     global _cached_enabled
     if _cached_enabled is not None:
         return _cached_enabled
@@ -39,6 +43,11 @@ def get_cicd_emit_enabled() -> bool:
     cc_cicd = os.getenv("CONTEXTCORE_CICD_EMIT", "").strip().lower()
     if cc_cicd:
         _cached_enabled = cc_cicd in ("true", "1", "yes")
+        emit_feature_flag_event(
+            "contextcore.cicd_emit",
+            str(_cached_enabled).lower(),
+            "contextcore-env",
+        )
         return _cached_enabled
 
     # 2. OTel standard env var (comma-separated token list)
@@ -47,10 +56,16 @@ def get_cicd_emit_enabled() -> bool:
         tokens = {t.strip() for t in otel_opt_in.split(",")}
         if "cicd" in tokens:
             _cached_enabled = True
+            emit_feature_flag_event(
+                "contextcore.cicd_emit", "true", "otel-env",
+            )
             return _cached_enabled
 
     # 3. Default: disabled
     _cached_enabled = False
+    emit_feature_flag_event(
+        "contextcore.cicd_emit", "false", "contextcore-default",
+    )
     return _cached_enabled
 
 
