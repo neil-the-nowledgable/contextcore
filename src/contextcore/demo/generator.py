@@ -25,6 +25,7 @@ from opentelemetry.trace import Link, SpanKind, Status, StatusCode
 
 from contextcore.tracker import TaskTracker, TaskType, TaskStatus
 from contextcore.compat.otel_cicd import apply_cicd_attributes
+from contextcore.compat.otel_limits import get_span_limits
 
 logger = logging.getLogger(__name__)
 
@@ -251,7 +252,10 @@ class HistoricalTaskTracker(TaskTracker):
             "project.id": project,
         })
 
-        self._provider = TracerProvider(resource=resource)
+        self._provider = TracerProvider(
+            resource=resource,
+            span_limits=get_span_limits(),
+        )
 
         if exporter:
             self._provider.add_span_processor(BatchSpanProcessor(exporter))

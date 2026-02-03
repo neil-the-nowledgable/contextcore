@@ -41,6 +41,7 @@ from contextcore.contracts.metrics import (
     CicdLabelName,
     FeatureFlagAttribute,
     MessagingAttribute,
+    SpanLimitConfig,
     EventType,
     ProjectSchema,
     RecordingRuleName,
@@ -51,6 +52,15 @@ from contextcore.contracts.metrics import (
     validate_alert_rule_name,
     GENAI_TOKEN_USAGE_BUCKETS,
     GENAI_DURATION_BUCKETS,
+    # Batch processor defaults
+    BSP_SCHEDULE_DELAY_MS,
+    BSP_MAX_QUEUE_SIZE,
+    BSP_MAX_EXPORT_BATCH_SIZE,
+    BSP_EXPORT_TIMEOUT_MS,
+    BLRP_SCHEDULE_DELAY_MS,
+    BLRP_MAX_QUEUE_SIZE,
+    BLRP_MAX_EXPORT_BATCH_SIZE,
+    BLRP_EXPORT_TIMEOUT_MS,
 )
 from contextcore.contracts.queries import (
     PromQLBuilder,
@@ -185,7 +195,18 @@ __all__ = [
     "FeatureFlagAttribute",
     # Messaging attributes
     "MessagingAttribute",
+    # Span limit config
+    "SpanLimitConfig",
     # Recording and alert rule contracts
     "RecordingRuleName",
     "AlertRuleName",
+    # Batch processor defaults
+    "BSP_SCHEDULE_DELAY_MS",
+    "BSP_MAX_QUEUE_SIZE",
+    "BSP_MAX_EXPORT_BATCH_SIZE",
+    "BSP_EXPORT_TIMEOUT_MS",
+    "BLRP_SCHEDULE_DELAY_MS",
+    "BLRP_MAX_QUEUE_SIZE",
+    "BLRP_MAX_EXPORT_BATCH_SIZE",
+    "BLRP_EXPORT_TIMEOUT_MS",
 ]

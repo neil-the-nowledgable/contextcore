@@ -195,6 +195,146 @@ Two span types are emitted per webhook:
 { span.messaging.operation.type = "process" && span.messaging.destination.name = "beaver_workflow" }
 ```
 
+### Attribute Limits
+
+Long-running task spans (e.g. epics or multi-week stories) accumulate many status change events and may produce oversized spans. ContextCore configures OTel `SpanLimits` to guard against this.
+
+#### OTel SDK Environment Variables
+
+The OTel Python SDK reads these environment variables to enforce span limits:
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `OTEL_ATTRIBUTE_COUNT_LIMIT` | 128 | Max attributes per span |
+| `OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT` | unlimited | Max attribute value length |
+| `OTEL_SPAN_EVENT_COUNT_LIMIT` | 128 | Max events per span |
+| `OTEL_SPAN_LINK_COUNT_LIMIT` | 128 | Max links per span |
+| `OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT` | inherits `OTEL_ATTRIBUTE_COUNT_LIMIT` | Max attributes on span (separate from resource) |
+
+#### ContextCore-Specific Overrides
+
+ContextCore provides project-specific env vars that take precedence over the OTel defaults:
+
+| Environment Variable | Overrides | Description |
+|---------------------|-----------|-------------|
+| `CONTEXTCORE_SPAN_EVENT_LIMIT` | `OTEL_SPAN_EVENT_COUNT_LIMIT` | Max events per span (for long-running tasks) |
+| `CONTEXTCORE_SPAN_LINK_LIMIT` | `OTEL_SPAN_LINK_COUNT_LIMIT` | Max links per span (for tasks with many dependencies) |
+
+When a ContextCore-specific override is set, a feature flag evaluation event is emitted for audit trail visibility.
+
+#### Configuration Example
+
+```bash
+# Increase event limit for long-running task spans (e.g. epics spanning months)
+export CONTEXTCORE_SPAN_EVENT_LIMIT=512
+
+# Or use OTel standard env vars directly
+export OTEL_SPAN_EVENT_COUNT_LIMIT=256
+export OTEL_SPAN_LINK_COUNT_LIMIT=64
+```
+
+#### Programmatic Usage
+
+```python
+from contextcore.compat.otel_limits import get_span_limits
+from opentelemetry.sdk.trace import TracerProvider
+
+# SpanLimits are automatically applied by TaskTracker and HistoricalTaskTracker.
+# For custom TracerProviders, use get_span_limits():
+provider = TracerProvider(span_limits=get_span_limits())
+```
+
+#### Contracts
+
+The `SpanLimitConfig` enum in `contextcore.contracts.metrics` defines the canonical env var names:
+
+```python
+from contextcore.contracts import SpanLimitConfig
+
+print(SpanLimitConfig.SPAN_EVENT_LIMIT.value)  # "CONTEXTCORE_SPAN_EVENT_LIMIT"
+print(SpanLimitConfig.SPAN_LINK_LIMIT.value)   # "CONTEXTCORE_SPAN_LINK_LIMIT"
+```
+
+### Batch Processor Configuration
+
+ContextCore uses the standard OTel `BatchSpanProcessor` and `BatchLogRecordProcessor` with their SDK defaults. The OTel Python SDK **automatically** reads the environment variables listed below -- no ContextCore-specific configuration is needed to tune batch behavior.
+
+#### Span Batch Processor (`OTEL_BSP_*`)
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `OTEL_BSP_SCHEDULE_DELAY` | `5000` | Delay between batch span exports (milliseconds) |
+| `OTEL_BSP_MAX_QUEUE_SIZE` | `2048` | Maximum number of spans queued before dropping |
+| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | `512` | Maximum number of spans per export batch |
+| `OTEL_BSP_EXPORT_TIMEOUT` | `30000` | Per-batch export timeout (milliseconds) |
+
+#### Log Record Batch Processor (`OTEL_BLRP_*`)
+
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `OTEL_BLRP_SCHEDULE_DELAY` | `5000` | Delay between batch log exports (milliseconds) |
+| `OTEL_BLRP_MAX_QUEUE_SIZE` | `2048` | Maximum number of log records queued before dropping |
+| `OTEL_BLRP_MAX_EXPORT_BATCH_SIZE` | `512` | Maximum log records per export batch |
+| `OTEL_BLRP_EXPORT_TIMEOUT` | `30000` | Per-batch log export timeout (milliseconds) |
+
+#### Common Tuning Scenarios
+
+**High-throughput environment** (many tasks, fast status changes):
+
+```bash
+# Larger queue and batch size to handle bursts
+export OTEL_BSP_MAX_QUEUE_SIZE=8192
+export OTEL_BSP_MAX_EXPORT_BATCH_SIZE=2048
+export OTEL_BSP_SCHEDULE_DELAY=1000
+```
+
+**Low-latency export** (see data in Tempo/Loki faster):
+
+```bash
+# Shorter delay means spans are exported sooner
+export OTEL_BSP_SCHEDULE_DELAY=1000
+export OTEL_BLRP_SCHEDULE_DELAY=1000
+```
+
+**Resource-constrained environment** (small memory footprint):
+
+```bash
+# Smaller queue to limit memory usage
+export OTEL_BSP_MAX_QUEUE_SIZE=512
+export OTEL_BSP_MAX_EXPORT_BATCH_SIZE=128
+export OTEL_BLRP_MAX_QUEUE_SIZE=512
+export OTEL_BLRP_MAX_EXPORT_BATCH_SIZE=128
+```
+
+#### Diagnostics
+
+Use the `contextcore.compat.otel_batch_config` module to inspect the active configuration:
+
+```python
+from contextcore.compat.otel_batch_config import get_batch_config_summary, log_batch_config
+
+# Get a dict of all batch processor env vars, their effective values, and
+# whether they have been explicitly customized
+summary = get_batch_config_summary()
+
+# Log the active config at INFO level (useful at application startup)
+log_batch_config()
+```
+
+The default values are also available as programmatic constants in `contextcore.contracts`:
+
+```python
+from contextcore.contracts import (
+    BSP_SCHEDULE_DELAY_MS,
+    BSP_MAX_QUEUE_SIZE,
+    BSP_MAX_EXPORT_BATCH_SIZE,
+    BSP_EXPORT_TIMEOUT_MS,
+)
+```
+
+> **Note**: `contextcore install verify` can report the active batch processor
+> configuration as part of its diagnostics output.
+
 ### Compat Module
 
 The `contextcore.compat.otel_genai` module provides the dual-emit layer:

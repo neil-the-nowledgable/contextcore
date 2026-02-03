@@ -88,6 +88,42 @@ GENAI_DURATION_BUCKETS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# OTel BatchSpanProcessor / BatchLogRecordProcessor default values
+# ---------------------------------------------------------------------------
+# These are the SDK-standard defaults for the batch processors. The OTel
+# Python SDK reads the corresponding OTEL_BSP_* / OTEL_BLRP_* env vars
+# automatically -- ContextCore simply documents them here as constants so
+# they can be referenced programmatically (e.g. in diagnostics, tests, or
+# install verification).
+#
+# See: https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/
+
+BSP_SCHEDULE_DELAY_MS: int = 5000
+"""Default delay between span batch exports (milliseconds)."""
+
+BSP_MAX_QUEUE_SIZE: int = 2048
+"""Default max number of spans queued before dropping."""
+
+BSP_MAX_EXPORT_BATCH_SIZE: int = 512
+"""Default max spans per export batch."""
+
+BSP_EXPORT_TIMEOUT_MS: int = 30000
+"""Default per-batch export timeout (milliseconds)."""
+
+BLRP_SCHEDULE_DELAY_MS: int = 5000
+"""Default delay between log record batch exports (milliseconds)."""
+
+BLRP_MAX_QUEUE_SIZE: int = 2048
+"""Default max number of log records queued before dropping."""
+
+BLRP_MAX_EXPORT_BATCH_SIZE: int = 512
+"""Default max log records per export batch."""
+
+BLRP_EXPORT_TIMEOUT_MS: int = 30000
+"""Default per-batch log export timeout (milliseconds)."""
+
+
 class RecordingRuleName(str, Enum):
     """
     Canonical recording rule names following kubernetes-mixin convention.
@@ -195,6 +231,26 @@ class MessagingAttribute(str, Enum):
     OPERATION_TYPE = "messaging.operation.type"
     MESSAGE_ID = "messaging.message.id"
     MESSAGE_BODY_SIZE = "messaging.message.body.size"
+
+
+class SpanLimitConfig(str, Enum):
+    """
+    ContextCore-specific environment variable names for OTel span limits.
+
+    These override the standard OTel SDK env vars to allow project-specific
+    tuning of span limits for long-running task spans that accumulate many
+    status change events.
+
+    Standard OTel SDK env vars (read automatically by SpanLimits):
+      OTEL_ATTRIBUTE_COUNT_LIMIT          (default 128)
+      OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT   (default unlimited)
+      OTEL_SPAN_EVENT_COUNT_LIMIT         (default 128)
+      OTEL_SPAN_LINK_COUNT_LIMIT          (default 128)
+      OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT     (inherits OTEL_ATTRIBUTE_COUNT_LIMIT)
+    """
+
+    SPAN_EVENT_LIMIT = "CONTEXTCORE_SPAN_EVENT_LIMIT"
+    SPAN_LINK_LIMIT = "CONTEXTCORE_SPAN_LINK_LIMIT"
 
 
 class CicdLabelName(str, Enum):

@@ -117,3 +117,11 @@ You should begin updating your TraceQL and LogQL queries to use the new attribut
 - **v3.0**: `CONTEXTCORE_EMIT_MODE` defaults to `otel`. Legacy attributes removed.
 
 We recommend switching `CONTEXTCORE_EMIT_MODE` to `otel` in your non-production environments to verify your dashboards and alerts are updated.
+
+---
+
+## Related: Batch Processor Configuration
+
+The OTel Python SDK also respects standard environment variables for tuning the `BatchSpanProcessor` and `BatchLogRecordProcessor` (e.g. `OTEL_BSP_SCHEDULE_DELAY`, `OTEL_BSP_MAX_QUEUE_SIZE`). ContextCore uses SDK defaults, so these work out of the box without any ContextCore-specific configuration.
+
+See [semantic-conventions.md -- Batch Processor Configuration](semantic-conventions.md#batch-processor-configuration) for the full list of env vars, defaults, and tuning examples.

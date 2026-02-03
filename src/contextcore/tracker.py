@@ -53,6 +53,7 @@ from contextcore.logger import TaskLogger
 from contextcore.state import StateManager, SpanState, format_trace_id, format_span_id
 from contextcore.compat.otel_genai import transform_attributes
 from contextcore.compat.otel_cicd import apply_cicd_attributes
+from contextcore.compat.otel_limits import get_span_limits
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +144,10 @@ class TaskTracker:
         }
         resource = Resource.create(resource_attrs)
 
-        self._provider = TracerProvider(resource=resource)
+        self._provider = TracerProvider(
+            resource=resource,
+            span_limits=get_span_limits(),
+        )
         self._export_mode = EXPORT_MODE_NONE
 
         if exporter:
