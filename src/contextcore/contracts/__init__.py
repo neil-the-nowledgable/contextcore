@@ -38,6 +38,7 @@ Example:
 from contextcore.contracts.metrics import (
     MetricName,
     LabelName,
+    CicdLabelName,
     EventType,
     ProjectSchema,
     RecordingRuleName,
@@ -176,6 +177,8 @@ __all__ = [
     # GenAI metric constants
     "GENAI_TOKEN_USAGE_BUCKETS",
     "GENAI_DURATION_BUCKETS",
+    # CI/CD pipeline labels
+    "CicdLabelName",
     # Recording and alert rule contracts
     "RecordingRuleName",
     "AlertRuleName",

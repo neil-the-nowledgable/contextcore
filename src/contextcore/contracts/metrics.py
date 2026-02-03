@@ -164,6 +164,22 @@ class LabelName(str, Enum):
     JOB = "job"
 
 
+class CicdLabelName(str, Enum):
+    """
+    CI/CD pipeline label names (OTel CI/CD semantic conventions).
+
+    These map from existing ContextCore task attributes to OTel CI/CD
+    pipeline attributes. Enabled via CONTEXTCORE_CICD_EMIT or
+    OTEL_SEMCONV_STABILITY_OPT_IN=cicd.
+    """
+
+    PIPELINE_NAME = "cicd.pipeline.name"
+    PIPELINE_RUN_ID = "cicd.pipeline.run.id"
+    PIPELINE_TASK_NAME = "cicd.pipeline.task.name"
+    PIPELINE_TASK_RUN_ID = "cicd.pipeline.task.run.id"
+    PIPELINE_TASK_TYPE = "cicd.pipeline.task.type"
+
+
 class EventType(str, Enum):
     """
     Canonical event types for structured logging.

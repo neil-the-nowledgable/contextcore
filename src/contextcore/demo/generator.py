@@ -24,6 +24,7 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, Spa
 from opentelemetry.trace import Link, SpanKind, Status, StatusCode
 
 from contextcore.tracker import TaskTracker, TaskType, TaskStatus
+from contextcore.compat.otel_cicd import apply_cicd_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -328,6 +329,9 @@ class HistoricalTaskTracker(TaskTracker):
             attributes["sprint.id"] = sprint_id
 
         attributes.update(extra_attributes)
+
+        # Apply CI/CD semantic conventions (opt-in)
+        attributes = apply_cicd_attributes(attributes)
 
         # Build links for dependencies
         links: List[Link] = []

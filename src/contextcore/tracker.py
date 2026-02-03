@@ -52,6 +52,7 @@ from contextcore.detector import (
 from contextcore.logger import TaskLogger
 from contextcore.state import StateManager, SpanState, format_trace_id, format_span_id
 from contextcore.compat.otel_genai import transform_attributes
+from contextcore.compat.otel_cicd import apply_cicd_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -377,6 +378,9 @@ class TaskTracker:
 
         # Apply dual-emit mapping
         attributes = transform_attributes(attributes)
+
+        # Apply CI/CD semantic conventions (opt-in)
+        attributes = apply_cicd_attributes(attributes)
 
         # Build links for dependencies
         links: List[Link] = []

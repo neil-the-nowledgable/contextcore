@@ -88,6 +88,45 @@ export CONTEXTCORE_EMIT_MODE=otel
 
 See the [Migration Guide](OTEL_GENAI_MIGRATION_GUIDE.md) for details.
 
+### OTel CI/CD Alignment
+
+ContextCore can optionally emit [OTel CI/CD semantic convention](https://opentelemetry.io/docs/specs/semconv/cicd/) attributes alongside existing `task.*` attributes. This is **disabled by default** and independent of the GenAI dual-emit feature.
+
+Enable via environment variable:
+
+```bash
+# ContextCore-specific (takes precedence)
+export CONTEXTCORE_CICD_EMIT=true
+
+# Or via OTel standard opt-in
+export OTEL_SEMCONV_STABILITY_OPT_IN=cicd
+```
+
+When enabled, the following attributes are added to task spans:
+
+| Source Attribute | CI/CD Attribute | Description |
+|-----------------|----------------|-------------|
+| `project.name` | `cicd.pipeline.name` | Pipeline (project) name |
+| `sprint.id` | `cicd.pipeline.run.id` | Pipeline run (sprint) identifier |
+| `task.title` | `cicd.pipeline.task.name` | Task name within the pipeline |
+| `task.id` | `cicd.pipeline.task.run.id` | Task run identifier |
+| `task.type` | `cicd.pipeline.task.type` | Task type (story, bug, etc.) |
+
+Original `task.*` attributes are always preserved. The CI/CD attributes are additive.
+
+**Example TraceQL queries:**
+
+```traceql
+# Find all CI/CD pipeline tasks
+{ span.cicd.pipeline.task.run.id != "" }
+
+# Filter by pipeline name
+{ span.cicd.pipeline.name = "my-project" }
+
+# Combine with existing task queries
+{ span.task.status = "completed" && span.cicd.pipeline.task.type = "story" }
+```
+
 ### Compat Module
 
 The `contextcore.compat.otel_genai` module provides the dual-emit layer:
