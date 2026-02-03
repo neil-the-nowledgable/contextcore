@@ -180,6 +180,23 @@ class FeatureFlagAttribute(str, Enum):
     RESULT_VALUE = "feature_flag.result.value"
 
 
+class MessagingAttribute(str, Enum):
+    """
+    OTel Messaging semantic convention attributes.
+
+    Used for Rabbit/Fox alert webhook processing spans. Enabled via
+    CONTEXTCORE_MESSAGING_EMIT or OTEL_SEMCONV_STABILITY_OPT_IN=messaging.
+
+    See: https://opentelemetry.io/docs/specs/semconv/messaging/
+    """
+
+    SYSTEM = "messaging.system"
+    DESTINATION_NAME = "messaging.destination.name"
+    OPERATION_TYPE = "messaging.operation.type"
+    MESSAGE_ID = "messaging.message.id"
+    MESSAGE_BODY_SIZE = "messaging.message.body.size"
+
+
 class CicdLabelName(str, Enum):
     """
     CI/CD pipeline label names (OTel CI/CD semantic conventions).

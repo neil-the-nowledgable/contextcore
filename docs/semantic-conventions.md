@@ -154,6 +154,47 @@ Events are added to the current span (if one is recording) and emitted as struct
 {job="contextcore"} | json | feature_flag_key="contextcore.emit_mode"
 ```
 
+### OTel Messaging Conventions (Rabbit/Fox)
+
+Rabbit/Fox alert processing can optionally emit [OTel Messaging semantic convention](https://opentelemetry.io/docs/specs/semconv/messaging/) attributes on webhook and action spans. This is **disabled by default** and independent of GenAI and CI/CD dual-emit.
+
+Enable via environment variable:
+
+```bash
+# ContextCore-specific (takes precedence)
+export CONTEXTCORE_MESSAGING_EMIT=true
+
+# Or via OTel standard opt-in
+export OTEL_SEMCONV_STABILITY_OPT_IN=messaging
+```
+
+When enabled, the following attributes are added to alert processing spans:
+
+| Attribute | Description | Example |
+|-----------|-------------|---------|
+| `messaging.system` | Alert source system | `grafana`, `alertmanager`, `manual` |
+| `messaging.destination.name` | Alert name or action target | `HighErrorRate`, `beaver_workflow` |
+| `messaging.operation.type` | Processing stage | `receive`, `process` |
+| `messaging.message.id` | Alert/message identifier | Alert fingerprint or UUID |
+| `messaging.message.body.size` | Payload size in bytes | `1024` |
+
+Two span types are emitted per webhook:
+- **Receive span** (`webhook.{source} receive`) — created in the webhook handler
+- **Process span** (`action.{name} process`) — created during action execution
+
+**Example TraceQL queries:**
+
+```traceql
+# Find all webhook receives
+{ span.messaging.operation.type = "receive" }
+
+# Filter by alert system
+{ span.messaging.system = "grafana" }
+
+# Find action processing spans
+{ span.messaging.operation.type = "process" && span.messaging.destination.name = "beaver_workflow" }
+```
+
 ### Compat Module
 
 The `contextcore.compat.otel_genai` module provides the dual-emit layer:

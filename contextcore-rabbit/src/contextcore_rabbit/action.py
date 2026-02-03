@@ -11,6 +11,18 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Type
 
+try:
+    from contextcore.compat.otel_messaging import build_messaging_attributes
+    _has_messaging_compat = True
+except ImportError:
+    _has_messaging_compat = False
+
+try:
+    from opentelemetry import trace
+    _tracer = trace.get_tracer("contextcore-rabbit")
+except ImportError:
+    _tracer = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -169,13 +181,39 @@ class ActionRegistry:
                 message=f"Validation failed: {error}"
             )
 
+        # Build messaging attributes for the process span
+        msg_attrs: Dict[str, Any] = {}
+        if _has_messaging_compat:
+            source = (context or {}).get("source", "unknown")
+            msg_attrs = build_messaging_attributes(
+                system=source,
+                destination=action_name,
+                operation="process",
+                message_id=payload.get("id") or payload.get("fingerprint"),
+            )
+
         # Execute
         try:
+            if _tracer and msg_attrs:
+                span = _tracer.start_span(
+                    f"action.{action_name} process",
+                    attributes=msg_attrs,
+                )
+            else:
+                span = None
+
             result = action.execute(payload, context)
             result.duration_ms = (time.time() - start_time) * 1000
+
+            if span is not None:
+                span.end()
+
             return result
         except Exception as e:
             logger.exception(f"Action {action_name} failed")
+            if span is not None:
+                span.set_status(trace.StatusCode.ERROR, str(e))
+                span.end()
             return ActionResult(
                 status=ActionStatus.FAILED,
                 action_name=action_name,

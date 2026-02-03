@@ -4,6 +4,7 @@ Webhook server for Rabbit.
 Receives webhooks from various sources and dispatches to registered actions.
 """
 
+import json
 import logging
 import uuid
 from datetime import datetime
@@ -15,7 +16,55 @@ from flask_cors import CORS
 from contextcore_rabbit.action import action_registry, ActionResult, ActionStatus
 from contextcore_rabbit.alert import Alert
 
+try:
+    from contextcore.compat.otel_messaging import build_messaging_attributes
+    _has_messaging_compat = True
+except ImportError:
+    _has_messaging_compat = False
+
+try:
+    from opentelemetry import trace
+    _tracer = trace.get_tracer("contextcore-rabbit")
+except ImportError:
+    _tracer = None
+
 logger = logging.getLogger(__name__)
+
+
+def _messaging_attrs(
+    system: str,
+    destination: str,
+    operation: str,
+    message_id: str | None = None,
+    body_size: int | None = None,
+) -> dict[str, Any]:
+    """Build OTel messaging attributes if compat module is available."""
+    if not _has_messaging_compat:
+        return {}
+    return build_messaging_attributes(system, destination, operation, message_id, body_size)
+
+
+class _span:
+    """Context manager that creates an OTel span when a tracer is available."""
+
+    def __init__(self, name: str, attributes: dict[str, Any]):
+        self._name = name
+        self._attributes = attributes
+        self._span = None
+
+    def __enter__(self):
+        if _tracer and self._attributes:
+            self._span = _tracer.start_span(self._name, attributes=self._attributes)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._span is not None:
+            if exc_type is not None:
+                self._span.set_status(
+                    trace.StatusCode.ERROR, str(exc_val),
+                )
+            self._span.end()
+        return False
 
 
 class WebhookServer:
@@ -266,11 +315,17 @@ class WebhookServer:
             # Determine action based on alert labels or default
             action_name = alert.labels.get("rabbit_action", "log")
 
-            result = action_registry.execute(
-                action_name,
-                alert.to_dict(),
-                {"source": "grafana", "raw_payload": payload}
+            span_attrs = _messaging_attrs(
+                "grafana", alert.name, "receive",
+                message_id=alert.id,
+                body_size=len(json.dumps(payload)),
             )
+            with _span("webhook.grafana receive", span_attrs):
+                result = action_registry.execute(
+                    action_name,
+                    alert.to_dict(),
+                    {"source": "grafana", "raw_payload": payload}
+                )
 
             return jsonify(result.to_dict())
 
@@ -287,11 +342,17 @@ class WebhookServer:
 
             action_name = alert.labels.get("rabbit_action", "log")
 
-            result = action_registry.execute(
-                action_name,
-                alert.to_dict(),
-                {"source": "alertmanager", "raw_payload": payload}
+            span_attrs = _messaging_attrs(
+                "alertmanager", alert.name, "receive",
+                message_id=alert.id,
+                body_size=len(json.dumps(payload)),
             )
+            with _span("webhook.alertmanager receive", span_attrs):
+                result = action_registry.execute(
+                    action_name,
+                    alert.to_dict(),
+                    {"source": "alertmanager", "raw_payload": payload}
+                )
 
             return jsonify(result.to_dict())
 
@@ -327,7 +388,12 @@ class WebhookServer:
             context = data.get("context", {})
             context["manual_trigger"] = True
 
-            result = action_registry.execute(action_name, payload, context)
+            span_attrs = _messaging_attrs(
+                "manual", action_name, "receive",
+                body_size=len(json.dumps(data)),
+            )
+            with _span("webhook.manual receive", span_attrs):
+                result = action_registry.execute(action_name, payload, context)
 
             return jsonify(result.to_dict())
 

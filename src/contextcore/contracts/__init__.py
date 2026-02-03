@@ -40,6 +40,7 @@ from contextcore.contracts.metrics import (
     LabelName,
     CicdLabelName,
     FeatureFlagAttribute,
+    MessagingAttribute,
     EventType,
     ProjectSchema,
     RecordingRuleName,
@@ -182,6 +183,8 @@ __all__ = [
     "CicdLabelName",
     # Feature flag attributes
     "FeatureFlagAttribute",
+    # Messaging attributes
+    "MessagingAttribute",
     # Recording and alert rule contracts
     "RecordingRuleName",
     "AlertRuleName",
