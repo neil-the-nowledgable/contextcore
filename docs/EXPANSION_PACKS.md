@@ -147,37 +147,41 @@ server.run()
 |-------|-------|
 | **Animal** | Fox |
 | **Anishinaabe** | Waagosh |
-| **Status** | Beta |
-| **Repository** | [contextcore-fox](https://github.com/contextcore/contextcore-fox) |
+| **Status** | Implemented |
+| **Repository** | [wayfinder-fox](https://github.com/Force-Multiplier-Labs/wayfinder) (in `wayfinder-fox/`) |
 | **License** | Equitable Use License v1.0 |
 | **Depends On** | contextcore-rabbit |
 
 **Description**: Fox is the ContextCore integration layer for alert automation. It builds on Rabbit and adds project context enrichment:
 
-- **Project Context Enrichment**: Alerts enriched with criticality, owner, SLO targets
-- **Intelligent Routing**: Critical projects route to Claude for analysis
-- **ContextCore Telemetry**: Action spans emitted to observability stack
+- **Project Context Enrichment**: Alerts enriched with criticality, owner, SLO targets from ProjectContext CRD
+- **Criticality Routing**: Routes alerts to actions based on business criticality
+- **Rabbit Integration**: Registers as `fox_enrich` action in Rabbit's dispatch system
+- **ContextCore Telemetry**: Emits `fox.alert.received`, `fox.context.enrich`, `fox.action.*` spans
 
 **Installation**:
 ```bash
-pip install contextcore-fox  # Also installs contextcore-rabbit
+pip install wayfinder-fox  # Also installs contextcore-rabbit
 ```
 
 **Quick Start**:
 ```python
-from contextcore_fox import configure
-from contextcore_fox.hermes import ProjectContextEnricher, ClaudeAction
-
-# Configure with ContextCore integration
-configure(
-    contextcore_enabled=True,
-    otel_endpoint="http://localhost:4317"
+from wayfinder_fox import (
+    ProjectContextEnricher,
+    CriticalityRouter,
+    FoxTracer,
+    FoxEnrichAction,  # Rabbit action integration
 )
+from wayfinder_fox.kubernetes import ProjectContextReader
 
-# Fox re-exports Rabbit's WebhookServer with ContextCore extensions
-from contextcore_fox.hermes import BaseWebhookServer
-server = BaseWebhookServer(port=8080)
-server.run()
+# Set up the enrichment pipeline
+tracer = FoxTracer()
+reader = ProjectContextReader(yaml_path=".contextcore.yaml")
+enricher = ProjectContextEnricher(reader=reader, tracer=tracer)
+router = CriticalityRouter(tracer=tracer)
+
+# Or use via Rabbit: alerts with rabbit_action="fox_enrich" are
+# automatically dispatched to FoxEnrichAction
 ```
 
 ---

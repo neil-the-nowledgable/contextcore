@@ -350,7 +350,8 @@ ecosystem:
       animal: "Fox"
       anishinaabe: "Waagosh"
       purpose: "ContextCore integration for alert automation (context enrichment)"
-      status: "beta"
+      status: "implemented"
+      implementationPackage: "wayfinder-fox"
       dependsOn: ["contextcore-rabbit"]
     - name: "contextcore-coyote"
       animal: "Coyote"
