@@ -36,8 +36,10 @@ Example (receiving agent):
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Optional
@@ -117,6 +119,7 @@ class ChunkSpec:
     target_file: str
     description: str
     parent_handoff_id: str
+    correlation_id: str = ""
     expected_exports: list[str] = field(default_factory=list)
 
 
@@ -473,16 +476,101 @@ class CodeGenerationCapability:
                         f"exceeds limit of {max_lines}. Enable chunking or reduce scope."
                     )
                 else:
-                    # TODO: Implement decomposition
-                    logger.warning(
-                        f"Decomposition required but not yet implemented. "
-                        f"Estimated {estimated.lines} lines > {max_lines} limit."
+                    # Decompose the spec into smaller chunks
+                    spec = CodeGenerationSpec(
+                        target_file=handoff.inputs.get("target_file", "unknown"),
+                        description=handoff.task,
+                        context_files=handoff.inputs.get("context_files", []),
+                        max_lines=max_lines,
+                        max_tokens=max_tokens,
+                        required_exports=required_exports or None,
+                        required_imports=handoff.inputs.get("required_imports"),
+                        must_have_docstring=handoff.inputs.get("must_have_docstring", True),
+                        allows_decomposition=True,
                     )
-                    # For now, proceed with generation and hope for the best
+                    chunk_specs = self._decompose_spec(spec, estimated)
+                    correlation_id = (
+                        handoff.expected_output.chunk_correlation_id
+                        or str(uuid.uuid4())
+                    )
+
+                    span.add_event("decomposition_decision", {
+                        "chunk_count": len(chunk_specs),
+                        "correlation_id": correlation_id,
+                        "estimated_lines": estimated.lines,
+                        "max_allowed": max_lines,
+                    })
+                    span.set_attribute("gen_ai.code.chunk_total", len(chunk_specs))
+                    span.set_attribute("gen_ai.code.correlation_id", correlation_id)
+
+                    logger.info(
+                        f"Decomposing into {len(chunk_specs)} chunks "
+                        f"(estimated {estimated.lines} lines > {max_lines} limit)"
+                    )
+
+                    # Generate each chunk with a child span
+                    chunk_results: list[str] = []
+                    for i, chunk_spec in enumerate(chunk_specs):
+                        with self.tracer.start_as_current_span("code_generation.chunk") as chunk_span:
+                            chunk_span.set_attribute("gen_ai.code.chunk_index", i)
+                            chunk_span.set_attribute("gen_ai.code.chunk_total", len(chunk_specs))
+                            chunk_span.set_attribute("gen_ai.code.correlation_id", correlation_id)
+                            chunk_span.set_attribute("gen_ai.code.target_file", chunk_spec.target_file)
+                            chunk_span.set_attribute(
+                                "gen_ai.code.required_exports",
+                                json.dumps(chunk_spec.required_exports or []),
+                            )
+
+                            chunk_content = self._generate_code(
+                                chunk_spec.description, {
+                                    "target_file": chunk_spec.target_file,
+                                    "required_exports": chunk_spec.required_exports,
+                                    "required_imports": chunk_spec.required_imports,
+                                    "must_have_docstring": chunk_spec.must_have_docstring,
+                                    "context_files": chunk_spec.context_files,
+                                },
+                            )
+                            chunk_line_count = chunk_content.count('\n') + 1
+                            chunk_span.set_attribute("gen_ai.code.actual_lines", chunk_line_count)
+                            chunk_results.append(chunk_content)
+
+                    # Assemble chunks
+                    content = self._assemble_chunks(chunk_results, spec)
+                    line_count = content.count('\n') + 1
+                    tokens_used = line_count * 3
+
+                    # Verify assembled result
+                    with self.tracer.start_as_current_span("code_generation.verify") as verify_span:
+                        exports = self._extract_exports(content)
+                        imports = self._extract_imports(content)
+                        issues = self._verify_completeness(content, required_exports)
+
+                        verify_span.set_attribute("gen_ai.code.exports_found", json.dumps(exports))
+                        verify_span.set_attribute("gen_ai.code.imports_found", json.dumps(imports))
+                        verify_span.set_attribute("gen_ai.code.decomposed", True)
+                        verify_span.set_attribute("gen_ai.code.chunk_total", len(chunk_specs))
+
+                        if issues:
+                            verify_span.set_status(Status(StatusCode.ERROR, f"Verification failed: {issues[0]}"))
+                            verify_span.set_attribute("gen_ai.code.truncated", True)
+                            verify_span.set_attribute("gen_ai.code.verification_issues", json.dumps(issues))
+                            raise CodeTruncatedError(issues)
+
+                        verify_span.set_attribute("gen_ai.code.truncated", False)
+                        verify_span.set_attribute("gen_ai.code.verification_result", VerificationResult.PASSED.value)
+
+                    return GeneratedCode(
+                        content=content,
+                        target_file=handoff.inputs.get("target_file", "unknown"),
+                        line_count=line_count,
+                        tokens_used=tokens_used,
+                        exports=exports,
+                        imports=imports,
+                    )
             else:
                 span.set_attribute("gen_ai.code.action", CodeGenerationAction.GENERATE.value)
 
-        # 2. Generate code
+        # 2. Generate code (non-decomposed path)
         with self.tracer.start_as_current_span("code_generation.generate") as span:
             content = self._generate_code(handoff.task, handoff.inputs)
             line_count = content.count('\n') + 1
@@ -545,7 +633,6 @@ class CodeGenerationCapability:
     def _extract_exports(self, content: str) -> list[str]:
         """Extract defined exports from code."""
         exports = []
-        import ast
         try:
             tree = ast.parse(content)
             for node in ast.walk(tree):
@@ -568,7 +655,6 @@ class CodeGenerationCapability:
     def _extract_imports(self, content: str) -> list[str]:
         """Extract imports from code."""
         imports = []
-        import ast
         try:
             tree = ast.parse(content)
             for node in ast.walk(tree):
@@ -619,3 +705,196 @@ class CodeGenerationCapability:
                 issues.append(f"TRUNCATED: {message}")
 
         return issues
+
+    def _decompose_spec(
+        self,
+        spec: CodeGenerationSpec,
+        estimate: SizeEstimate,
+    ) -> list[CodeGenerationSpec]:
+        """Decompose a large code generation spec into smaller chunk specs.
+
+        Splits based on required_exports so each chunk generates a subset
+        of the requested exports. If no exports are specified, splits by
+        dividing the description into logical parts.
+
+        Args:
+            spec: The original spec that exceeds size limits
+            estimate: The size estimate that triggered decomposition
+
+        Returns:
+            List of smaller CodeGenerationSpec instances
+        """
+        max_lines = spec.max_lines
+
+        if spec.required_exports and len(spec.required_exports) > 1:
+            # Split by exports: distribute exports across chunks
+            exports = list(spec.required_exports)
+            # Determine how many exports per chunk based on ratio
+            lines_per_export = estimate.lines / len(exports)
+            exports_per_chunk = max(1, int(max_lines / lines_per_export))
+
+            chunks: list[CodeGenerationSpec] = []
+            for i in range(0, len(exports), exports_per_chunk):
+                chunk_exports = exports[i:i + exports_per_chunk]
+                chunk_max_lines = int(max_lines * len(chunk_exports) / max(exports_per_chunk, 1))
+                # Ensure each chunk gets at least a reasonable minimum
+                chunk_max_lines = max(chunk_max_lines, 30)
+
+                chunk_spec = CodeGenerationSpec(
+                    target_file=spec.target_file,
+                    description=(
+                        f"Chunk {len(chunks) + 1}: Generate {', '.join(chunk_exports)} "
+                        f"for: {spec.description}"
+                    ),
+                    context_files=spec.context_files,
+                    max_lines=chunk_max_lines,
+                    max_tokens=int(spec.max_tokens * len(chunk_exports) / len(exports)),
+                    required_exports=chunk_exports,
+                    required_imports=spec.required_imports,
+                    must_have_docstring=spec.must_have_docstring if i == 0 else False,
+                    allows_decomposition=False,  # Prevent recursive decomposition
+                )
+                chunks.append(chunk_spec)
+
+            return chunks
+        else:
+            # No exports to split on: split into two halves by scope
+            half_lines = max_lines
+            chunk_1 = CodeGenerationSpec(
+                target_file=spec.target_file,
+                description=f"Part 1 of 2: {spec.description} (structure, imports, class definitions)",
+                context_files=spec.context_files,
+                max_lines=half_lines,
+                max_tokens=spec.max_tokens,
+                required_exports=spec.required_exports,
+                required_imports=spec.required_imports,
+                must_have_docstring=spec.must_have_docstring,
+                allows_decomposition=False,
+            )
+            chunk_2 = CodeGenerationSpec(
+                target_file=spec.target_file,
+                description=f"Part 2 of 2: {spec.description} (method implementations, helpers)",
+                context_files=spec.context_files,
+                max_lines=half_lines,
+                max_tokens=spec.max_tokens,
+                required_exports=None,
+                required_imports=spec.required_imports,
+                must_have_docstring=False,
+                allows_decomposition=False,
+            )
+            return [chunk_1, chunk_2]
+
+    def _assemble_chunks(
+        self,
+        chunks: list[str],
+        spec: CodeGenerationSpec,
+    ) -> str:
+        """Assemble generated code chunks into a single module.
+
+        Combines multiple code chunks by:
+        1. Collecting and deduplicating imports
+        2. Preserving class and function definitions in order
+        3. Maintaining a single module docstring
+
+        Args:
+            chunks: List of generated code strings
+            spec: The original spec for context
+
+        Returns:
+            Combined code string with deduplicated imports
+        """
+        all_imports: list[str] = []
+        all_import_froms: list[str] = []
+        all_future_imports: list[str] = []
+        body_parts: list[str] = []
+        module_docstring: Optional[str] = None
+
+        for chunk in chunks:
+            lines = chunk.split('\n')
+            body_lines: list[str] = []
+
+            i = 0
+            # Check for module docstring at the start
+            while i < len(lines) and lines[i].strip() == '':
+                i += 1
+
+            if i < len(lines) and (lines[i].strip().startswith('"""') or lines[i].strip().startswith("'''")):
+                quote = '"""' if '"""' in lines[i] else "'''"
+                if lines[i].strip().count(quote) >= 2:
+                    # Single-line docstring
+                    if module_docstring is None:
+                        module_docstring = lines[i]
+                    i += 1
+                else:
+                    # Multi-line docstring
+                    ds_lines = [lines[i]]
+                    i += 1
+                    while i < len(lines) and quote not in lines[i]:
+                        ds_lines.append(lines[i])
+                        i += 1
+                    if i < len(lines):
+                        ds_lines.append(lines[i])
+                        i += 1
+                    if module_docstring is None:
+                        module_docstring = '\n'.join(ds_lines)
+
+            # Process remaining lines
+            while i < len(lines):
+                line = lines[i]
+                stripped = line.strip()
+
+                if stripped.startswith('from __future__'):
+                    if stripped not in all_future_imports:
+                        all_future_imports.append(stripped)
+                elif stripped.startswith('import '):
+                    if not line.startswith(' ') and not line.startswith('\t'):
+                        if stripped not in all_imports:
+                            all_imports.append(stripped)
+                    else:
+                        body_lines.append(line)
+                elif stripped.startswith('from ') and ' import ' in stripped:
+                    if not line.startswith(' ') and not line.startswith('\t'):
+                        if stripped not in all_import_froms:
+                            all_import_froms.append(stripped)
+                    else:
+                        body_lines.append(line)
+                else:
+                    body_lines.append(line)
+                i += 1
+
+            # Trim leading/trailing blank lines from body
+            while body_lines and body_lines[0].strip() == '':
+                body_lines.pop(0)
+            while body_lines and body_lines[-1].strip() == '':
+                body_lines.pop()
+
+            if body_lines:
+                body_parts.append('\n'.join(body_lines))
+
+        # Assemble final output
+        result_parts: list[str] = []
+
+        if module_docstring:
+            result_parts.append(module_docstring)
+            result_parts.append('')
+
+        if all_future_imports:
+            result_parts.extend(all_future_imports)
+            result_parts.append('')
+
+        if all_imports:
+            all_imports.sort()
+            result_parts.extend(all_imports)
+
+        if all_import_froms:
+            all_import_froms.sort()
+            result_parts.extend(all_import_froms)
+
+        if all_imports or all_import_froms:
+            result_parts.append('')
+            result_parts.append('')
+
+        result_parts.append('\n\n\n'.join(body_parts))
+        result_parts.append('')
+
+        return '\n'.join(result_parts)

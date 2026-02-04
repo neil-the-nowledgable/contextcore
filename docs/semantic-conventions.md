@@ -908,6 +908,21 @@ Tasks are modeled as OpenTelemetry spans. These attributes appear on task spans.
 - **Description**: Task ID that is blocking this task
 - **Example**: `"PROJ-100"`
 
+### `task.deliverable.count`
+- **Type**: `int`
+- **Description**: Number of expected deliverables registered for the task
+- **Example**: `3`
+
+### `task.deliverable.verified`
+- **Type**: `int`
+- **Description**: Number of deliverables that passed verification
+- **Example**: `2`
+
+### `task.deliverables_complete`
+- **Type**: `boolean`
+- **Description**: Whether all registered deliverables were verified successfully. Only set when deliverables are registered on the task.
+- **Example**: `true`
+
 ---
 
 ## Sprint Attributes
@@ -1115,6 +1130,7 @@ Task spans use events to track lifecycle changes:
 | `task.unblocked` | Block removed | - |
 | `task.assigned` | Assignee changed | `from`, `to` |
 | `task.commented` | Comment added | `author`, `text` |
+| `task.deliverables_verified` | Deliverable validation ran | `deliverable.count`, `deliverable.verified_count`, `deliverable.failed_count`, `deliverable.results` |
 | `task.completed` | Task finished | - |
 | `task.cancelled` | Task cancelled | `reason` |
 

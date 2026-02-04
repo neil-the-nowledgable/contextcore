@@ -30,12 +30,14 @@ Example:
 from __future__ import annotations
 
 import atexit
+import json
 import logging
 import os
 import socket
 import traceback
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
@@ -79,11 +81,52 @@ TASK_PERCENT_COMPLETE = "task.percent_complete"
 TASK_SUBTASK_COUNT = "task.subtask_count"
 TASK_SUBTASK_COMPLETED = "task.subtask_completed"
 TASK_PARENT_ID = "task.parent_id"
+TASK_DELIVERABLE_COUNT = "task.deliverable.count"
+TASK_DELIVERABLE_VERIFIED = "task.deliverable.verified"
+TASK_DELIVERABLES_COMPLETE = "task.deliverables_complete"
 
 PROJECT_ID = "project.id"
 PROJECT_NAME = "project.name"
 SPRINT_ID = "sprint.id"
 SPRINT_NAME = "sprint.name"
+
+
+@dataclass
+class Deliverable:
+    """
+    An expected deliverable for a task.
+
+    Deliverables represent concrete outputs that a task should produce.
+    They are verified when the task is completed to ensure execution
+    actually produced the expected results.
+
+    Args:
+        type: Deliverable type - "file", "section", "api", "test", "config"
+        path: File path, URL, or identifier for the deliverable
+        description: Human-readable description of the expected deliverable
+        validator: Optional custom validation callable; returns True if verified
+    """
+
+    type: str
+    path: str
+    description: str
+    validator: Optional[Callable[[], bool]] = field(default=None, repr=False)
+
+
+@dataclass
+class DeliverableResult:
+    """
+    Result of validating a single deliverable.
+
+    Args:
+        deliverable: The deliverable that was checked
+        verified: Whether the deliverable was successfully verified
+        reason: Explanation when verification fails
+    """
+
+    deliverable: Deliverable
+    verified: bool
+    reason: Optional[str] = None
 
 
 class TaskTracker:
@@ -123,6 +166,8 @@ class TaskTracker:
         self._shutdown_called = False
         # Store task attributes separately to avoid relying on span._attributes (internal API)
         self._task_attributes: Dict[str, Dict[str, Any]] = {}
+        # Store expected deliverables per task for validation at completion
+        self._task_deliverables: Dict[str, List[Deliverable]] = {}
 
         # Initialize structured logger for Loki
         self._task_logger = TaskLogger(project=project, service_name=service_name)
@@ -318,6 +363,7 @@ class TaskTracker:
         url: Optional[str] = None,
         due_date: Optional[str] = None,
         sprint_id: Optional[str] = None,
+        deliverables: Optional[List[Deliverable]] = None,
         **extra_attributes: Any) -> trace.SpanContext:
         """
         Start a new task span.
@@ -336,6 +382,7 @@ class TaskTracker:
             url: Link to external system
             due_date: Due date (ISO format)
             sprint_id: Sprint identifier
+            deliverables: Expected deliverables to verify on completion
             **extra_attributes: Additional span attributes
 
         Returns:
@@ -428,6 +475,11 @@ class TaskTracker:
         self._active_spans[task_id] = span
         self._span_contexts[task_id] = span.get_span_context()
         self._task_attributes[task_id] = attributes.copy()
+
+        # Store deliverables for validation at completion
+        if deliverables:
+            self._task_deliverables[task_id] = list(deliverables)
+            self._set_task_attr(task_id, TASK_DELIVERABLE_COUNT, len(deliverables))
 
         # Track parent-child relationships
         if parent_id:
@@ -621,9 +673,113 @@ class TaskTracker:
         self._save_state()
         logger.info(f"Task {task_id} assigned to {assignee}")
 
+    def _validate_deliverables(
+        self,
+        task_id: str,
+        span: Span,
+    ) -> Optional[List[DeliverableResult]]:
+        """
+        Validate expected deliverables for a task.
+
+        For each deliverable:
+        - If a custom validator is provided, call it
+        - For "file" type without a validator, check os.path.exists(path)
+        - Otherwise mark as verified (no auto-check available)
+
+        Emits a task.deliverables_verified span event with results.
+        Logs warnings for any failed deliverables but does NOT block completion.
+
+        Args:
+            task_id: Task identifier
+            span: The active span for the task
+
+        Returns:
+            List of DeliverableResult, or None if no deliverables were registered
+        """
+        deliverables = self._task_deliverables.get(task_id)
+        if not deliverables:
+            return None
+
+        results: List[DeliverableResult] = []
+        for d in deliverables:
+            if d.validator is not None:
+                try:
+                    verified = d.validator()
+                    reason = None if verified else "Custom validator returned False"
+                except Exception as exc:
+                    verified = False
+                    reason = f"Validator raised {type(exc).__name__}: {exc}"
+            elif d.type == "file":
+                verified = os.path.exists(d.path)
+                reason = None if verified else f"File not found: {d.path}"
+            else:
+                # No auto-check available for non-file types without a validator
+                verified = True
+                reason = None
+
+            results.append(DeliverableResult(
+                deliverable=d,
+                verified=verified,
+                reason=reason,
+            ))
+
+        verified_count = sum(1 for r in results if r.verified)
+        failed_count = len(results) - verified_count
+        all_verified = failed_count == 0
+
+        # Build JSON summary of results for span event
+        results_summary = [
+            {
+                "type": r.deliverable.type,
+                "path": r.deliverable.path,
+                "description": r.deliverable.description,
+                "verified": r.verified,
+                "reason": r.reason,
+            }
+            for r in results
+        ]
+
+        # Emit span event with deliverable verification results
+        span.add_event(
+            "task.deliverables_verified",
+            attributes={
+                "deliverable.count": len(results),
+                "deliverable.verified_count": verified_count,
+                "deliverable.failed_count": failed_count,
+                "deliverable.results": json.dumps(results_summary),
+            },
+        )
+
+        # Set span attribute indicating whether all deliverables passed
+        self._set_task_attr(task_id, TASK_DELIVERABLES_COMPLETE, all_verified)
+        self._set_task_attr(task_id, TASK_DELIVERABLE_VERIFIED, verified_count)
+
+        # Log warnings for failed deliverables
+        if failed_count > 0:
+            failed_items = [r for r in results if not r.verified]
+            failed_descriptions = [
+                f"  - [{r.deliverable.type}] {r.deliverable.path}: "
+                f"{r.reason or 'verification failed'}"
+                for r in failed_items
+            ]
+            logger.warning(
+                f"Task {task_id}: {failed_count}/{len(results)} deliverables "
+                f"failed verification:\n" + "\n".join(failed_descriptions)
+            )
+        else:
+            logger.info(
+                f"Task {task_id}: all {verified_count} deliverables verified"
+            )
+
+        return results
+
     def complete_task(self, task_id: str) -> None:
         """
         Complete a task (ends the span with OK status).
+
+        If deliverables were specified at task start, they are validated before
+        completing. Failed deliverables produce warnings but do NOT block
+        completion -- the task is always completed.
 
         Also updates parent's progress if this task has a parent.
 
@@ -633,6 +789,9 @@ class TaskTracker:
         span = self._get_span(task_id)
         if not span:
             return
+
+        # Validate deliverables before completing (warn-only, never blocks)
+        self._validate_deliverables(task_id, span)
 
         # Mark as 100% complete
         self._set_task_attr(task_id, TASK_PERCENT_COMPLETE, 100.0)
@@ -653,8 +812,9 @@ class TaskTracker:
 
         # Remove from active spans but keep context for linking
         del self._active_spans[task_id]
-        # Also clean up attributes tracking (keep for a bit for any late lookups)
+        # Also clean up attributes and deliverables tracking
         self._task_attributes.pop(task_id, None)
+        self._task_deliverables.pop(task_id, None)
 
         # Archive completed span state
         self._state_manager.remove_span(task_id)
