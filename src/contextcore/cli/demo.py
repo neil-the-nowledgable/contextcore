@@ -77,6 +77,25 @@ def demo_load(spans_file: str, endpoint: str, insecure: bool):
         sys.exit(1)
 
 
+@demo.command("load-logs")
+@click.option("--file", "-f", "logs_file", required=True, type=click.Path(exists=True), help="JSON logs file")
+@click.option("--endpoint", "-e", envvar="LOKI_URL", default="http://localhost:3100/loki/api/v1/push", help="Loki push endpoint")
+def demo_load_logs(logs_file: str, endpoint: str):
+    """Load generated logs to Loki via push API."""
+    from contextcore.demo import load_to_loki
+
+    click.echo(f"Loading logs from {logs_file}")
+    click.echo(f"  Endpoint: {endpoint}")
+
+    result = load_to_loki(endpoint=endpoint, logs_file=logs_file)
+
+    if result["success"]:
+        click.echo(f"Successfully loaded {result['logs_pushed']} logs ({result['streams']} streams) to {endpoint}")
+    else:
+        click.echo(f"Failed to load logs: {result.get('error', 'unknown error')}", err=True)
+        sys.exit(1)
+
+
 @demo.command("setup")
 @click.option("--cluster-name", default="contextcore-demo", help="Kind cluster name")
 @click.option("--skip-cluster", is_flag=True, help="Skip cluster creation")

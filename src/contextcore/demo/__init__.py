@@ -23,6 +23,7 @@ Usage:
 __all__ = [
     "HistoricalTaskTracker",
     "generate_demo_data",
+    "load_to_loki",
     "load_to_tempo",
     "SERVICE_CONFIGS",
 ]
@@ -38,6 +39,9 @@ def __getattr__(name: str):
     if name == "load_to_tempo":
         from contextcore.demo.exporter import load_to_tempo
         return load_to_tempo
+    if name == "load_to_loki":
+        from contextcore.demo.exporter import load_to_loki
+        return load_to_loki
     if name == "SERVICE_CONFIGS":
         from contextcore.demo.project_data import SERVICE_CONFIGS
         return SERVICE_CONFIGS

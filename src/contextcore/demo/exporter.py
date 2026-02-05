@@ -213,17 +213,6 @@ def load_to_loki(
         streams[label_key].append([ts_ns, log_line])
 
     # Build Loki push payload
-    payload = {
-        "streams": [
-            {
-                "stream": json.loads(label_key.replace("{", '{"').replace("=", '":"').replace(", ", '","').replace("}", '"}')),
-                "values": values
-            }
-            for label_key, values in streams.items()
-        ]
-    }
-
-    # Actually, Loki expects a specific format. Let me fix this:
     loki_streams = []
     for label_key, values in streams.items():
         # Parse labels from the key
